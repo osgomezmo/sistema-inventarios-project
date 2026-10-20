@@ -7,3 +7,7 @@ Formato para presentacion de trabajos ASI - Word.docx
 
 # Archivos temporales que crea Word mientras un documento está abierto
 ~$*
+
+# Configuración local de Claude Code (personal de cada integrante)
+.claude/settings.local.json
+.claude/hooks/
