@@ -1,0 +1,9 @@
+# Bóveda de Obsidian (bitacora_ia/): configuración local de cada integrante
+.obsidian/
+.trash/
+
+# Plantilla institucional de presentación de trabajos (no se versiona)
+Formato para presentacion de trabajos ASI - Word.docx
+
+# Archivos temporales que crea Word mientras un documento está abierto
+~$*
