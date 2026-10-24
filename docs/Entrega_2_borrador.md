@@ -2,17 +2,17 @@
 
 **Proyecto:** Sistema de gestión de inventarios basado en microservicios (supermercado mediano)
 **Fecha de entrega:** 26/10/2026 · sustentación oral + entrega de diagramas · 20 %
-**Estado:** consolidado el 20/10/2026. El Word con la plantilla institucional está en `docs/Entrega_2_Proyecto_ISW2_Sistema_Gestion_Inventarios.docx`.
+**Estado:** consolidado el 20/10/2026, ajustado el 21/10/2026 al nuevo alcance (sin contenerización, orquestación ni pruebas de rendimiento) y el 22/10/2026 con los cambios del equipo (sin descubrimiento de servicios; RabbitMQ autorizado por el docente; OpenAPI no se aborda). El 23/10/2026 quedó la **versión final** tras la revisión del documento (citas con fecha, ortografía y sin pendientes en el Word). El Word con la plantilla institucional está en `docs/Entrega_2_Proyecto_ISW2_Sistema_Gestion_Inventarios.docx`.
 
 ## Lista de la entrega (enunciado, sección 9)
 
-- [x] 1. Diagrama de arquitectura de microservicios (componentes, comunicación, API Gateway propio, Service Discovery). *Aprobado el 20/10/2026.*
+- [x] 1. Diagrama de arquitectura de microservicios (componentes, comunicación, API Gateway propio, Service Discovery). *Aprobado el 20/10/2026. El 22/10/2026 el equipo retiró del documento el descubrimiento de servicios; se retoma con Kubernetes en la Entrega 3.*
 - [x] 2. Contratos de API por microservicio (en tablas). *Aprobados el 20/10/2026.*
 - [x] 3. Modelo de datos por microservicio (diagrama entidad-relación, notación de Chen). *Aprobado el 20/10/2026.*
-- [x] 4. Estrategia de contenerización y orquestación (Dockerfiles y manifiestos de Kubernetes). *Pendiente la revisión del equipo y la distribución de Kubernetes.*
-- [x] 5. Plan de las 15 pruebas de rendimiento por integrante (3 bloques de 15 con Locust). *Pendiente asignar un bloque a cada integrante y elegir el entorno.*
-- [x] 6. Actividad de todos los integrantes evidenciada en GitHub. *Documentados el estado actual y el plan; faltan los aportes de Daniel y Oscar.*
-- [x] 7. Bitácora de uso de IA de la fase. *Consolidada la de Andrés; faltan las de Daniel y Oscar y la revisión de la reflexión.*
+- [ ] ~~4. Estrategia de contenerización y orquestación (Dockerfiles y manifiestos de Kubernetes).~~ *Fuera del alcance de la Entrega 2 desde el 21/10/2026; pasa a la Entrega 3. La propuesta se conserva en el Paso 5 de este borrador.*
+- [ ] ~~5. Plan de las 15 pruebas de rendimiento por integrante (3 bloques de 15 con Locust).~~ *Fuera del alcance de la Entrega 2 desde el 21/10/2026; pasa a la Entrega 3. La propuesta se conserva en el Paso 6 de este borrador.*
+- [x] 6. Actividad de todos los integrantes evidenciada en GitHub. *Documentados el estado actual y el plan; faltan los aportes de Daniel y Óscar.*
+- [x] 7. Bitácora de uso de IA de la fase. *Consolidada la de Andrés; faltan las de Daniel y Óscar y la revisión de la reflexión.*
 
 ---
 
@@ -32,7 +32,7 @@ Solo se usan tecnologías vistas en clase (RNF19): Laravel, Flask, Express, MySQ
 | ms-compras | Flask | MySQL | Ciclo de estados de la orden de compra (RF06), devoluciones a proveedor (RF13) y publicación de eventos. |
 | ms-reportes | Flask | MySQL | Agregaciones, rotación y exportación a CSV/PDF (RF11, RF14). |
 | ms-proveedores | Express | MySQL | Maestro de proveedores y su relación con los productos que suministran (RF03). |
-| ms-notificaciones | Express | Firebase | Igual que el ejemplo de clase: envío de alertas con Firebase (RF09). |
+| ms-notificaciones | Express | Firebase | Envío de alertas con Firebase (RF09). |
 
 *Ajuste del 20/10/2026:* inventario y compras pasaron de Laravel a Flask para dejar Laravel solo en el gateway.
 
@@ -41,11 +41,13 @@ Solo se usan tecnologías vistas en clase (RNF19): Laravel, Flask, Express, MySQ
 - **Decisión:** los eventos (`MercanciaRecibida`, `StockBajoUmbral`, eventos para reportes y la salida por devolución a proveedor) viajan por un **broker de mensajería**: RabbitMQ o Redis, a definir en el paso 2.
 - **Riesgo:** el broker no se ha visto en clase y el enunciado solo permite tecnologías vistas (RNF19). **Hay que pedir autorización al docente.**
 - **Plan B si no se autoriza:** tabla de eventos pendientes en MySQL dentro de cada productor, un proceso en segundo plano que los envía por HTTP con reintentos, y consumidores que ignoran eventos repetidos. El diseño de los eventos no cambia; solo cambia el canal.
+- **Resuelto (registrado el 22/10/2026):** el docente autorizó RabbitMQ. El plan B ya no aplica y se quitó del Word.
 
 ### 1.3 Contratos de API
 
 - **Decisión:** los contratos se documentan **en tablas** dentro del documento. Por cada endpoint se indica el método, la ruta, el rol autorizado, el cuerpo de entrada, la respuesta y los códigos de error.
 - **Riesgo:** el enunciado pide los contratos "(OpenAPI/Swagger)". Si el docente lo exige, las tablas se pueden convertir a un `openapi.yaml` por servicio sin rediseñar nada.
+- **Resuelto (22/10/2026):** OpenAPI no se aborda; los contratos se quedan en tablas, como están en el Word.
 
 ---
 
@@ -53,14 +55,14 @@ Solo se usan tecnologías vistas en clase (RNF19): Laravel, Flask, Express, MySQ
 
 ### 2.1 Decisiones
 
-- **Broker:** RabbitMQ, sujeto a la autorización del docente. Es mensajería de propósito general, tiene librería para los dos frameworks de los microservicios (Flask con pika y Express con amqplib; el gateway no usa RabbitMQ) y un panel web para mostrar las colas en la sustentación.
+- **Broker:** RabbitMQ, autorizado por el docente (registrado el 22/10/2026). Es mensajería de propósito general, tiene librería para los dos frameworks de los microservicios (Flask con pika y Express con amqplib; el gateway no usa RabbitMQ) y un panel web para mostrar las colas en la sustentación.
 - **Convenciones de mensajería (propuesta):**
   - Un *exchange* de tipo *topic* (`inventario.eventos`). La *routing key* es el nombre del evento.
   - Una cola durable por servicio consumidor, enlazada solo a los eventos que le interesan.
   - Confirmación manual (*ack*) después de procesar el evento.
   - Colas de tipo *quorum* con un límite de 3 entregas (`x-delivery-limit`) y un *dead letter exchange* que lleva los mensajes fallidos a `q.<servicio>.errores`.
   - Todos los mensajes en JSON con el mismo sobre: `id_evento` (UUID), `tipo`, `fecha`, `productor`, `id_correlacion` y `datos`. El consumidor guarda los `id_evento` ya procesados e ignora los repetidos.
-- **Descubrimiento de servicios:** cada microservicio se expone con un `Service` de Kubernetes y los demás lo llaman por su nombre DNS interno (`http://ms-productos`, `http://ms-proveedores`, etc.). Las URL se leen de variables de entorno, nunca `localhost` fijo.
+- **Descubrimiento de servicios:** cada microservicio se expone con un `Service` de Kubernetes y los demás lo llaman por su nombre DNS interno (`http://ms-productos`, `http://ms-proveedores`, etc.). Las URL se leen de variables de entorno, nunca `localhost` fijo. *Retirado del Word el 22/10/2026 por decisión del equipo; se retoma con Kubernetes en la Entrega 3.*
 - **Identidad del usuario hacia los microservicios:** el gateway valida el token de Sanctum y el rol. Luego reenvía la petición con el token de servicio (RNF10) y los encabezados `X-User-Id`, `X-User-Role` y `X-Correlation-Id`. Los servicios usan `X-User-Id` para auditar (RF10), y `X-Correlation-Id` sirve para rastrear la petición en los logs (RNF11).
 - **Diagramas de la entrega:** solo el de arquitectura lógica, como imagen generada con el mismo estilo de la Entrega 1.
 
@@ -239,7 +241,7 @@ Decisiones del equipo: contratos en tablas (no OpenAPI), rutas al estilo del eje
   - 422: validación de campos.
   - 503: un servicio del que depende no responde.
 - **Inactivar en vez de borrar:** los maestros se inactivan con `POST /<recurso>/{id}/inactivar` y se reactivan con `/activar`, como las acciones `bloquear`/`activar` del ejemplo de clase. Nada con historia se borra físicamente (RF01).
-- **Salud:** cada servicio expone `GET /health` para las sondas de Kubernetes (RNF12). No pasa por el gateway.
+- **Salud:** cada servicio expone `GET /health` para verificar que está activo (health check, RNF12); en la Entrega 3 lo usarán las sondas de Kubernetes. No pasa por el gateway.
 
 ### 4.2 Enrutamiento del gateway
 
@@ -422,6 +424,8 @@ Todos los eventos usan el mismo sobre:
 ---
 
 ## Paso 5 — Contenerización y orquestación (20/10/2026)
+
+> **Fuera del alcance de la Entrega 2 (cambio del 21/10/2026).** Esta sección no va en el Word de la entrega. Se conserva como propuesta inicial para la Entrega 3 (contenerización y despliegue inicial en Kubernetes).
 
 ### 5.1 Decisiones
 
@@ -676,6 +680,8 @@ Los Secret reales no se suben al repositorio; solo se versionan los `secret.exam
 
 ## Paso 6 — Plan de pruebas de rendimiento (20/10/2026)
 
+> **Fuera del alcance de la Entrega 2 (cambio del 21/10/2026).** Esta sección no va en el Word de la entrega. Se conserva como propuesta inicial para la Entrega 3 (avance de las 15 pruebas por integrante).
+
 ### 6.1 Decisiones
 
 - **Herramienta:** Locust. Las pruebas se escriben en Python y se ejecutan sin interfaz (`--headless`), exportando resultados en CSV y HTML (`--csv`, `--html`) para versionarlos en GitHub.
@@ -757,44 +763,59 @@ Cada endpoint se prueba en los tres escenarios. Por ejemplo, la prueba A2 genera
 
 ## Paso 7 — GitHub, bitácora y documento final (20/10/2026)
 
-Decisiones del equipo: la sección de GitHub muestra el estado actual y un plan; las bitácoras de Daniel y Oscar aún no tienen registros de esta fase; la IA redacta un borrador de la reflexión para revisión del equipo, y se genera el Word.
+Decisiones del equipo: la sección de GitHub muestra el estado actual y un plan; las bitácoras de Daniel y Óscar aún no tienen registros de esta fase; la IA redacta un borrador de la reflexión para revisión del equipo, y se genera el Word.
 
-### 7.1 Actividad en GitHub (al 20/10/2026)
+### 7.1 Actividad en GitHub (al 21/10/2026)
 
 | Integrante | Rama | Commits | Pull requests | Observaciones |
 |---|---|---|---|---|
-| Andrés Hernández | `andres` | 27/09: README con integrantes y documentos. 19/10: rectificación de la Entrega 1. | #1 `andres` → `develop`, fusionado el 19/10/2026 | Dos nombres de autor (Andres Hernandez y hernandez2404) con el mismo correo. |
-| Oscar David Gomez Mosquera | `oscar` | 24/09: proyecto base del API Gateway en Laravel. | — | Su commit es la base de `main` y `develop`. |
-| Daniel Stiven Bahamon Quintero | `daniel` | 27/09: estructura inicial de MS-Proveedores y MS-Compras. | — | El autor aparece como "unknown": falta `git config user.name`. |
+| Andrés Hernández | `andres` | 27/09: README con integrantes y documentos. 19/10: rectificación de la Entrega 1. 20/10: avance de la Entrega 2 (borrador, figuras y Word). | #1 `andres` → `develop`, fusionado el 19/10/2026. #2 `andres` → `develop`, fusionado el 20/10/2026. | Dos nombres de autor (Andres Hernandez y hernandez2404) con el mismo correo. |
+| Óscar David Gómez Mosquera | `oscar` | 24/09: proyecto base del API Gateway en Laravel. | — | Su commit es la base de `main` y `develop`. |
+| Daniel Stiven Bahamón Quintero | `daniel` | 27/09: estructura inicial de MS-Proveedores y MS-Compras. | — | El autor aparece como "unknown": falta `git config user.name`. |
 
-El material de esta entrega (este borrador, `docs/figuras/` y el Word) todavía no está en el repositorio.
+El borrador, `docs/figuras/` y la primera versión del Word ya están en `develop` (PR #2).
 
 **Plan hasta el 26/10/2026:**
 1. Daniel configura `git config --global user.name`. Andrés puede unificar su nombre de autor (opcional).
-2. Andrés sube desde su rama el borrador, las figuras con sus scripts y el Word, y abre un PR a `develop`.
-3. Daniel y Oscar suben a sus ramas sus aportes de esta fase (por ejemplo, contratos, manifiestos de Kubernetes o los scripts de Locust de su bloque) y los integran con PR revisados por otro integrante.
+2. Andrés sube la versión del Word ajustada al nuevo alcance con un PR a `develop`.
+3. Daniel y Óscar suben a sus ramas sus aportes de esta fase (por ejemplo, la revisión de los contratos y del modelo de datos de los servicios que van a construir) y los integran con PR revisados por otro integrante.
 4. Cada integrante sube su bitácora de IA desde su propia rama.
 5. El equipo asigna un responsable por microservicio para la Entrega 3.
 
 ### 7.2 Bitácora de uso de IA
 
-- Andrés: tres filas (19/10 ×2 y 20/10) en `bitacora_ia/andres_hernandez.md`, consolidadas en el Word (Tabla 22).
-- Daniel y Oscar: **pendiente** registrar su uso de IA en esta fase.
-- Reflexión final de la fase: borrador en el Word (sección 8.3) y en la bitácora de Andrés, **pendiente de revisión del equipo**.
+- Andrés: seis filas (19/10 ×2, 20/10 ×2, 21/10 y 22/10) en `bitacora_ia/andres_hernandez.md`, consolidadas en el Word (Tabla 15).
+- Daniel y Óscar: **pendiente** registrar su uso de IA en esta fase.
+- Reflexión final de la fase: borrador en el Word (sección 6.3) y en la bitácora de Andrés, **pendiente de revisión del equipo**.
 
 ### 7.3 Documento final
 
-`docs/Entrega_2_Proyecto_ISW2_Sistema_Gestion_Inventarios.docx`: 49 páginas con la plantilla institucional, 10 capítulos, 23 tablas, 8 figuras y bibliografía APA con referencias verificadas en la documentación oficial. Los pendientes quedan en el capítulo 9.
+`docs/Entrega_2_Proyecto_ISW2_Sistema_Gestion_Inventarios.docx` (versión final del 23/10/2026): 35 páginas con la plantilla institucional, 7 capítulos, 15 tablas, 8 figuras y 10 referencias APA, todas con fecha. El Word ya no tiene capítulo de pendientes: las tareas abiertas quedan solo en este borrador.
+
+Revisión final del 23/10/2026 (observaciones del revisor):
+- **Citas con fecha.** Se buscó la fecha de cada fuente y se reemplazaron todas las «s. f.»: Google (página actualizada el 22/10/2026), Microsoft (30/06/2025), RabbitMQ (AMQP 0-9-1: 27/03/2024; DLX y quorum queues, docs 4.4: 19/10/2026), Laravel Sanctum 13.x (16/09/2026) y los tres patrones de microservices.io (2014, 2015 y 2020). Las páginas que no muestran fecha se fecharon con el último cambio en su repositorio oficial (RabbitMQ y Laravel en GitHub) o con su primera publicación según el Internet Archive (microservices.io, cuyo repositorio no es público).
+- **Swagger.** Se quitó la línea «Swagger Open: https://swagger.io/open-source/» de la sección 4.10; queda como pendiente para después de la fase de desarrollo (ver abajo).
+- **Estructura.** Se quitaron la sección 5.2 (plan hasta la sustentación), el capítulo 7 (riesgos y decisiones pendientes) y la nota de bitácoras pendientes de Daniel y Óscar. Las conclusiones pasan a ser el capítulo 7.
+- **Ortografía.** «entrega», «tabla» y «figura» en minúscula en el texto corrido; cargos de los roles en minúscula (jefe de bodega, compras); tildes en las entidades (Categoría, Recepción, DevoluciónProveedor, Notificación, RecuperaciónContraseña), también en los diagramas; nombres de los integrantes con tilde (Óscar David Gómez Mosquera, Daniel Stiven Bahamón Quintero); nombres de eventos y atributos en letra de código, con una frase que explica que son identificadores sin tildes. Las ramas de git se dejan con su nombre real (`andres`, `oscar`, `daniel`). Se pasó el corrector de español de Word: sin errores en el texto corrido.
+
+Cambios del equipo del 22/10/2026: Andrés quitó del Word el descubrimiento de servicios (antes sección 2.3), el plan alternativo del broker, la mención a OpenAPI, la frase del ajuste de alcance en el resumen y la introducción, y «igual que en el ejemplo de clase» en la Tabla 1. Para que el resto quedara coherente se completó la frase de la sección 2.1, se actualizó el índice, se cambiaron los rótulos de la Figura 1 («Red interna de microservicios» en lugar de «Clúster Kubernetes · DNS interno» y sin «sujeto a autorización del docente»), se quitaron las referencias de Kubernetes y del patrón outbox (ya no se citaban), se retiraron los pendientes de RabbitMQ y OpenAPI, y se ajustaron las conclusiones y la reflexión.
+
+Cambio de alcance del 21/10/2026: se quitaron del Word los capítulos de contenerización y orquestación (antes capítulo 5) y de pruebas de rendimiento (antes capítulo 6), con sus 7 tablas y las 8 referencias que solo citaban ellos (Docker, Gunicorn, Locust, Oracle, Flask y tres de Kubernetes). El descubrimiento de servicios por DNS de Kubernetes se mantiene en el capítulo 2, porque hace parte del diagrama de arquitectura. La versión anterior (49 páginas) queda en el historial de git (commit `2d31b10`).
 
 ### Pendientes abiertos
 
-- [ ] Pedir al docente autorización para el broker (RabbitMQ o Redis).
-- [ ] Confirmar con el docente si los contratos en tablas son aceptables en lugar de OpenAPI.
-- [ ] Definir el responsable de cada microservicio (evidencia individual en GitHub) y asignar un bloque de pruebas (A, B o C) a cada integrante.
-- [ ] Elegir el entorno de las pruebas de rendimiento (Docker Compose o Kubernetes local).
+- [x] Pedir al docente autorización para el broker: **autorizó RabbitMQ** (registrado el 22/10/2026).
+- [x] Contratos en tablas frente a OpenAPI: OpenAPI no se aborda; los contratos se quedan en tablas (22/10/2026).
+- [ ] Definir el responsable de cada microservicio (evidencia individual en GitHub).
 - [ ] Configurar el `git config user.name` de Daniel (sus commits aparecen como "unknown").
 - [x] Asociación producto–proveedor: se agrega en ms-proveedores (decisión del 20/10/2026).
-- [ ] Elegir la distribución de Kubernetes (Minikube, Docker Desktop o kind) y dónde se publican las imágenes (por ejemplo, Docker Hub).
+- [ ] Daniel y Óscar: registrar su bitácora de IA de la Entrega 2 y subir sus aportes con pull requests antes del 26/10/2026.
+- [ ] Revisar en equipo la reflexión final de la fase (sección 6.3 del Word).
+
+**Para después de la fase de desarrollo:**
+- [ ] Documentar las API con Swagger (https://swagger.io/open-source/), a partir de los contratos en tablas del Word.
+
+**Para la Entrega 3** (salieron del alcance de la Entrega 2 el 21/10/2026):
+- [ ] Revisar la propuesta de contenerización y orquestación (Paso 5) y elegir la distribución de Kubernetes y dónde se publican las imágenes (por ejemplo, Docker Hub).
 - [ ] Confirmar con el docente si Gunicorn (servidor para Flask) cuenta como parte de las tecnologías vistas en clase.
-- [ ] Daniel y Oscar: registrar su bitácora de IA de la Entrega 2 y subir sus aportes con pull requests antes del 26/10/2026.
-- [ ] Revisar en equipo la reflexión final de la fase (sección 8.3 del Word).
+- [ ] Revisar el plan de pruebas (Paso 6), asignar un bloque de pruebas (A, B o C) a cada integrante y elegir el entorno (Docker Compose o Kubernetes local).
