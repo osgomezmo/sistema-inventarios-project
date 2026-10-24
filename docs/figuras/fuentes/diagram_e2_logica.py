@@ -123,7 +123,7 @@ for (bbox, start) in [((cx0, cy0, cx0 + 40, cy0 + 40), 180), ((cx1 - 40, cy0, cx
                       ((cx0, cy1 - 40, cx0 + 40, cy1), 90), ((cx1 - 40, cy1 - 40, cx1, cy1), 0)]:
     d.arc(bbox, start, start + 90, fill=gray, width=3)
 d.text((cx0 + 28, cy0 + 14),
-       "Clúster Kubernetes · cada servicio se descubre por su nombre DNS interno (http://ms-<nombre>)",
+       "Red interna de microservicios · solo se accede a ellos a través del API Gateway",
        font=F_SMALL, fill="#666666")
 
 # --- Row 1 -----------------------------------------------------------------------------
@@ -145,8 +145,7 @@ BY0, BY1 = 820, 905
 b = FAM["broker"]
 d.rounded_rectangle((65, BY0, 1935, BY1), radius=14, fill=b["fill"], outline=b["stroke"], width=4)
 text_center(1000, BY0 + 14, "RabbitMQ · broker de eventos", font(27, True), b["text"])
-text_center(1000, BY0 + 50, "una cola por servicio consumidor · mensajes en JSON · sujeto a autorización del docente",
-            F_SMALL, b["text"])
+text_center(1000, BY0 + 50, "una cola por servicio consumidor · mensajes en JSON", F_SMALL, b["text"])
 
 # compras publishes
 arrow((1700, R1Y1), (1700, BY0), dashed=True)

@@ -277,7 +277,7 @@ def gateway():
     posee = g.rel("posee", 485, 770)
     g.link(posee, usuario, "1")
     g.link(posee, token, "N")
-    rec = g.entity("RecuperacionContrasena", 1040, 1270)
+    rec = g.entity("RecuperaciónContraseña", 1040, 1270)
     g.attrs_arc(rec, [("email", {"key": True}), "token_hash", "creado_en"], 40, 140, 230, 170)
     solicita = g.rel("solicita", 760, 880)
     g.link(solicita, usuario, "1")
@@ -287,7 +287,7 @@ def gateway():
 
 def productos():
     g = Chen(1800, 1100, "core", "ms-productos · Flask · MySQL")
-    cat = g.entity("Categoria", 420, 480)
+    cat = g.entity("Categoría", 420, 480)
     g.attrs_arc(cat, [("id_categoria", {"key": True}), "nombre", "descripcion", "estado"], 200, 340, 300, 240)
     cont = g.rel("contiene", 420, 820)
     g.poly([(cat["x"] - 90, cat["y"] + 39), (cont["x"] - cont["w"] / 2, cont["y"])])
@@ -368,9 +368,9 @@ def compras():
     g.attrs_arc(orden, [("id_orden", {"key": True}), "numero", "id_proveedor", "id_bodega_destino", "estado",
                         "total", "id_usuario_creador", "id_usuario_aprobador", "creada_en", "aprobada_en"],
                 185, 355, 760, 330)
-    rec = g.entity("Recepcion", 330, 1200)
+    rec = g.entity("Recepción", 330, 1200)
     det = g.entity("DetalleOrden", 1000, 1200)
-    dev = g.entity("DevolucionProveedor", 1720, 1200)
+    dev = g.entity("DevoluciónProveedor", 1720, 1200)
     contiene = g.rel("contiene", 1000, 870)
     tiene = g.rel("tiene", 560, 870)
     registra = g.rel("registra", 1480, 870)
@@ -432,7 +432,7 @@ def reportes():
 
 def notificaciones():
     g = Chen(1800, 1260, "support", "ms-notificaciones · Express · Firebase (Firestore)")
-    n = g.entity("Notificacion", 500, 640)
+    n = g.entity("Notificación", 500, 640)
     g.attrs_arc(n, [("id_notificacion", {"key": True}), "tipo", "titulo", "mensaje", "rol_destino", "leida",
                     "creada_en"], 270, 115, 380, 320)
     datos = g.attr(n, "datos", 760, 330)
