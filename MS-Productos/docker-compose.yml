@@ -1,0 +1,16 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ms-productos-mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${DB_NAME:?falta DB_NAME en .env}
+      MYSQL_USER: ${DB_USER:?falta DB_USER en .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:33061:3306"
+    volumes:
+      - ms_productos_mysql:/var/lib/mysql
+
+volumes:
+  ms_productos_mysql:
