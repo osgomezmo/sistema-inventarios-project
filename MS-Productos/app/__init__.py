@@ -4,6 +4,7 @@ from app.auth import registrar_autenticacion
 from app.config import cargar_configuracion
 from app.errors import registrar_manejadores_de_error
 from app.json_provider import ProveedorJson
+from app.routes.categorias import categorias_bp
 from app.routes.health import health_bp
 
 
@@ -20,5 +21,6 @@ def create_app(config=None):
     registrar_manejadores_de_error(app)
     registrar_autenticacion(app)
     app.register_blueprint(health_bp)
+    app.register_blueprint(categorias_bp)
 
     return app
