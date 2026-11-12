@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Código de la aplicación (la configuración llega por variables de entorno)
 COPY app/ app/
+COPY db/ db/
 COPY run.py .
 
 # Usuario sin privilegios
