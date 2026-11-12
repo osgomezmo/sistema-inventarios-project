@@ -7,9 +7,11 @@ Microservicio del catálogo de categorías y productos (Flask). Por ahora solo i
 ```bash
 cd MS-Productos
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-dev.txt
 cp .env.example .env    # cambia SERVICE_TOKEN y DB_PASSWORD
 ```
+
+`requirements.txt` tiene solo las dependencias de ejecución, que son las que instala la imagen Docker. `requirements-dev.txt` las incluye y agrega las de pruebas.
 
 ## Correr el servicio
 
