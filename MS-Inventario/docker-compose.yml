@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    image: ms-inventario:dev
+    container_name: ms-inventario-app
+    env_file: .env
+    environment:
+      # Dentro de la red de Compose, MySQL se alcanza por el nombre del servicio
+      # y por su puerto interno.
+      DB_HOST: mysql
+      DB_PORT: "3306"
+    ports:
+      - "127.0.0.1:5002:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    container_name: ms-inventario-mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${DB_NAME:?falta DB_NAME en .env}
+      MYSQL_USER: ${DB_USER:?falta DB_USER en .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:33062:3306"
+    volumes:
+      - ms_inventario_mysql:/var/lib/mysql
+    healthcheck:
+      # Usuario de la aplicación: la contraseña de root es aleatoria. Se usa TCP
+      # para no dar por sano el servidor temporal de la inicialización.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  ms_inventario_mysql:
