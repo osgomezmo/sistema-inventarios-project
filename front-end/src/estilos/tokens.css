@@ -1,0 +1,86 @@
+/* Estiba · tokens del mundo «demarcación de piso».
+   El piso de la bodega es el fondo; la pintura de seguridad (ISO 3864) da el significado:
+   amarillo = camino y selección, franja amarilla y negra = stock bajo, rojo = agotado, daño o error,
+   naranja = pendiente, verde = recibido o correcto, azul = información. */
+
+:root {
+  color-scheme: light;
+
+  /* Piso */
+  --concreto: #e3e3df;
+  --concreto-2: #d6d6d1;
+  --concreto-3: #c8c8c2;
+  --placa: #ffffff;
+  --placa-2: #f5f5f2;
+  --linea: #cfcfc9;
+  --linea-fuerte: #8b8e93;
+
+  /* Riel de asfalto */
+  --asfalto: #232529;
+  --asfalto-2: #2e3136;
+  --asfalto-3: #3b3f45;
+  --sobre-asfalto: #ececee;
+  --sobre-asfalto-2: #b1b4ba;
+
+  /* Tinta */
+  --tinta: #17181b;
+  --tinta-2: #45484e;
+  --tinta-3: #5f6268;
+
+  /* Pintura de seguridad */
+  --amarillo: #ffc72c;
+  --amarillo-2: #f2b705;
+  --amarillo-claro: #fff0c2;
+  --amarillo-tinta: #3d3000;
+  --rojo: #c2311e;
+  --rojo-claro: #fbe4e0;
+  --naranja: #e36f12;
+  --naranja-tinta: #8f4100;
+  --naranja-claro: #fdebdb;
+  --verde: #1c7a41;
+  --verde-claro: #ddf1e4;
+  --azul: #1c5da6;
+  --azul-claro: #e1edf9;
+  --madera: #b8885a;
+  --carton: #c9a06a;
+
+  --franja: repeating-linear-gradient(-45deg, var(--amarillo) 0 7px, var(--tinta) 7px 14px);
+
+  /* Tipografía */
+  --fuente: 'Barlow', system-ui, sans-serif;
+  --fuente-c: 'Barlow Condensed', 'Barlow', sans-serif;
+  --fuente-s: 'Big Shoulders Stencil Display', 'Barlow Condensed', sans-serif;
+
+  --t-xs: 0.875rem;   /* 14 px, el mínimo legible en bodega */
+  --t-s: 0.9375rem;   /* 15 px */
+  --t-m: 1rem;        /* 16 px, cuerpo */
+  --t-l: 1.125rem;    /* 18 px */
+  --t-xl: 1.375rem;   /* 22 px */
+  --t-2xl: 1.75rem;   /* 28 px */
+  --t-3xl: 2.25rem;   /* 36 px */
+  --t-4xl: 3rem;      /* 48 px */
+
+  /* Espacio */
+  --e-1: 4px;
+  --e-2: 8px;
+  --e-3: 12px;
+  --e-4: 16px;
+  --e-5: 20px;
+  --e-6: 24px;
+  --e-7: 32px;
+  --e-8: 40px;
+  --e-9: 56px;
+
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+
+  --sombra-1: 0 1px 2px rgb(23 24 27 / 0.08), 0 2px 8px rgb(23 24 27 / 0.06);
+  --sombra-2: 0 8px 24px rgb(23 24 27 / 0.16), 0 2px 6px rgb(23 24 27 / 0.08);
+
+  --barra: 60px;
+  --riel: 240px;
+  --control: 44px;
+
+  --ease-salida: cubic-bezier(0.16, 1, 0.3, 1);
+}
