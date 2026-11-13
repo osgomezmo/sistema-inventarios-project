@@ -7,7 +7,7 @@ import { Buscar, Perfil, Usuarios } from './paginas/Admin'
 import { Bodegas, Categorias, Productos } from './paginas/Catalogo'
 import { Dashboard } from './paginas/Dashboard'
 import { Devoluciones, NuevaDevolucionCliente } from './paginas/Devoluciones'
-import { NoEncontrado } from './paginas/Errores'
+import { ErrorDePantalla, NoEncontrado } from './paginas/Errores'
 import { Ingreso, Recuperar } from './paginas/Ingreso'
 import { Kardex } from './paginas/Kardex'
 import { Movimientos, NuevoMovimiento } from './paginas/Movimientos'
@@ -21,13 +21,15 @@ import { NuevoTraslado, Traslados } from './paginas/Traslados'
 const con = (op: Operacion, elemento: ReactNode) => <ConPermiso op={op}>{elemento}</ConPermiso>
 
 export const router = createBrowserRouter([
-  { path: '/ingresar', element: <Ingreso /> },
-  { path: '/recuperar', element: <Recuperar /> },
+  { path: '/ingresar', element: <Ingreso />, errorElement: <ErrorDePantalla /> },
+  { path: '/recuperar', element: <Recuperar />, errorElement: <ErrorDePantalla /> },
   {
     element: <RequiereSesion />,
+    errorElement: <ErrorDePantalla />,
     children: [
       {
         element: <Shell />,
+        errorElement: <ErrorDePantalla />,
         children: [
           { index: true, element: con('reportes', <Dashboard />) },
           { path: 'stock', element: con('stock', <Stock />) },

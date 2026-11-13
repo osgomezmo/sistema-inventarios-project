@@ -30,6 +30,16 @@ export function fechaOct(dia: number, hora: number, minuto = 0): string {
 /** "Ahora" en la plantilla: 29/10/2026 a las 4:00 p. m. en Manizales. */
 export const AHORA = fechaOct(29, 16)
 
+const cargaReal = Date.now()
+/**
+ * Hora de los registros nuevos: el «ahora» de la plantilla más el tiempo real transcurrido
+ * desde que se abrió la aplicación. Así lo que se guarda cae dentro del mismo día simulado
+ * y aparece en el kardex, en «Movimientos hoy» y en los listados recientes.
+ */
+export function ahoraSimulado(): string {
+  return new Date(Date.parse(AHORA) + (Date.now() - cargaReal)).toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
 const decimales = (sku: string) => (productoPorSku.get(sku)!.unidad_medida === 'UNIDAD' ? 0 : 3)
 const redondear = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d
 const clave = (sku: string, id_bodega: number) => `${sku}|${id_bodega}`

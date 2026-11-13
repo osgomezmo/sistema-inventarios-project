@@ -8,6 +8,7 @@ import { useSesion, useUsuario } from '../auth/Sesion'
 import { nombreRol, puedeVer, type Operacion } from '../auth/permisos'
 import { useBodega } from '../contexto/Bodega'
 import { notificacionesApi, reportesApi } from '../api/cliente'
+import { ProveedorAvisos } from '../contexto/Avisos'
 import { Marca } from './Marca'
 import { useEsMovil } from '../lib/useEsMovil'
 
@@ -51,6 +52,7 @@ export function Shell() {
   const [rielAbierto, setRielAbierto] = useState(false)
   const [sinLeer, setSinLeer] = useState(0)
   const [stockBajo, setStockBajo] = useState(0)
+  const [avisoBusqueda, setAvisoBusqueda] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const esMovil = useEsMovil()
 
@@ -74,12 +76,15 @@ export function Shell() {
   function buscar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const q = String(new FormData(e.currentTarget).get('q') ?? '').trim()
-    if (q) navegar(`/buscar?q=${encodeURIComponent(q)}`)
+    if (q.length < 2) { setAvisoBusqueda(true); return }
+    setAvisoBusqueda(false)
+    navegar(`/buscar?q=${encodeURIComponent(q)}`)
   }
 
   const visible = (op: Enlace['op']) => (Array.isArray(op) ? op : [op]).some((o) => puedeVer(usuario.rol, o))
 
   return (
+    <ProveedorAvisos>
     <div className="app">
       <header className="barra">
         <button type="button" className="icono-btn abrir-riel" aria-label="Abrir menú" aria-expanded={rielAbierto} onClick={() => setRielAbierto((v) => !v)}>
@@ -90,7 +95,9 @@ export function Shell() {
         <form className="buscador" role="search" onSubmit={buscar}>
           <Search size={20} aria-hidden />
           <label htmlFor="buscar-global" className="solo-lector">Buscar</label>
-          <input id="buscar-global" name="q" type="search" placeholder="Buscar SKU, producto o documento (OC-2026-0015)" autoComplete="off" />
+          <input id="buscar-global" name="q" type="search" placeholder="Buscar SKU, producto o documento (OC-2026-0015)" autoComplete="off" maxLength={60}
+            aria-invalid={avisoBusqueda || undefined} aria-describedby={avisoBusqueda ? 'buscar-aviso' : undefined} onInput={() => avisoBusqueda && setAvisoBusqueda(false)} />
+          {avisoBusqueda && <span id="buscar-aviso" className="buscador-aviso" role="alert">Escribe al menos 2 caracteres para buscar.</span>}
         </form>
 
         <div className="barra-bodega">
@@ -152,5 +159,6 @@ export function Shell() {
         <Outlet />
       </main>
     </div>
+    </ProveedorAvisos>
   )
 }

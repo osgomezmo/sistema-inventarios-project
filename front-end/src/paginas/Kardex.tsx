@@ -4,7 +4,8 @@ import { kardexApi } from '../api/cliente'
 import { bodegaPorId, productoPorSku, productos } from '../api/mock/maestros'
 import { esEntrada } from '../api/mock/simulacion'
 import { useBodega } from '../contexto/Bodega'
-import { Cargando, Encabezado, ErrorCaja, TipoMov, Vacio } from '../componentes/ui'
+import { Campo, Cargando, Encabezado, ErrorCaja, TipoMov, Vacio } from '../componentes/ui'
+import { reglas } from '../lib/validacion'
 import { cantidad, dinero, fecha, fechaHora, nombreTipo, numeroMovimiento } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 
@@ -16,7 +17,10 @@ export function Kardex() {
   const desde = params.get('desde') ?? '2026-10-20'
   const hasta = params.get('hasta') ?? '2026-10-29'
   const p = productoPorSku.get(sku)!
-  const c = useConsulta(() => kardexApi.consultar({ sku, id_bodega: bodega, desde, hasta }), [sku, bodega, desde, hasta])
+  const errorDesde = reglas.requerido(desde, 'Elige la fecha inicial.') || null
+  const errorHasta = reglas.requerido(hasta, 'Elige la fecha final.') || reglas.rangoFechas(desde, hasta) || null
+  const rangoValido = !errorDesde && !errorHasta
+  const c = useConsulta(() => (rangoValido ? kardexApi.consultar({ sku, id_bodega: bodega, desde, hasta }) : Promise.resolve(null)), [sku, bodega, desde, hasta])
   const cambiar = (clave: string, valor: string) => {
     const n = new URLSearchParams(params)
     n.set('sku', sku); n.set('id_bodega', String(bodega)); n.set('desde', desde); n.set('hasta', hasta)
@@ -61,13 +65,14 @@ export function Kardex() {
             {activas.map((b) => <option key={b.id_bodega} value={b.id_bodega}>{b.codigo} · {b.nombre}</option>)}
           </select>
         </div>
-        <div className="campo"><label htmlFor="k-desde">Desde</label><input id="k-desde" type="date" value={desde} onChange={(e) => cambiar('desde', e.target.value)} /></div>
-        <div className="campo"><label htmlFor="k-hasta">Hasta</label><input id="k-hasta" type="date" value={hasta} onChange={(e) => cambiar('hasta', e.target.value)} /></div>
+        <Campo id="k-desde" etiqueta="Desde" error={errorDesde ? [errorDesde] : undefined}><input id="k-desde" type="date" max={hasta || undefined} value={desde} onChange={(e) => cambiar('desde', e.target.value)} /></Campo>
+        <Campo id="k-hasta" etiqueta="Hasta" error={errorHasta ? [errorHasta] : undefined}><input id="k-hasta" type="date" min={desde || undefined} value={hasta} onChange={(e) => cambiar('hasta', e.target.value)} /></Campo>
       </div>
 
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       <div className="tabla-envoltura">
-        {!c.datos && !c.error && <Cargando filas={10} />}
+        {!rangoValido && <Vacio titulo="Corrige el rango de fechas">El kardex necesita una fecha inicial y una final, y la final no puede ser anterior.</Vacio>}
+        {rangoValido && !c.datos && !c.error && <Cargando filas={10} />}
         {c.datos && (
           <table className="tabla">
             <thead>

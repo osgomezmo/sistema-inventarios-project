@@ -8,7 +8,8 @@ import { useUsuario } from '../auth/Sesion'
 import { puedeEditar } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
 import { useBodega } from '../contexto/Bodega'
-import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, EtiquetaOrden, Paginacion, Vacio, erroresCampo } from '../componentes/ui'
+import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, ErrorCelda, EtiquetaOrden, Paginacion, Vacio, erroresCampo } from '../componentes/ui'
+import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 import { cantidad, dinero, fecha, fechaHora, nombreEstadoOrden } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 
@@ -178,11 +179,27 @@ function FormCantidades({ o, modo, listo, cancelar }: { o: OrdenCompra; modo: 'r
   const recibir = modo === 'recibir'
   const disponible = (i: OrdenCompra['items'][number]) => (recibir ? i.cantidad - i.cantidad_recibida : i.cantidad_recibida - i.cantidad_devuelta)
 
-  async function enviar(e: FormEvent) {
+  const conSaldo = o.items.filter((i) => disponible(i) > 0)
+  const v = useValidacion(validar({
+    ...Object.fromEntries(conSaldo.map((i) => {
+      const p = productoPorSku.get(i.sku)!
+      return [`c-${i.id_detalle}`, [reglas.numero(cant[i.id_detalle] ?? '', {
+        decimales: decimalesPorUnidad(p.unidad_medida),
+        min: 0,
+        max: disponible(i),
+        mensajeMax: recibir ? `Quedan ${cantidad(disponible(i), p.unidad_medida)} por recibir.` : `Solo se pueden devolver ${cantidad(disponible(i), p.unidad_medida)}.`,
+      })]]
+    })),
+    items: [!conSaldo.some((i) => (aNumero(cant[i.id_detalle] ?? '') ?? 0) > 0) && (recibir ? 'Escribe al menos una cantidad recibida.' : 'Escribe al menos una cantidad a devolver.')],
+    texto: recibir ? [reglas.largo(texto, 0, 300)] : [reglas.requerido(texto, 'Indica el motivo de la devolución.'), reglas.largo(texto, 5, 200)],
+  }))
+
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
-    const items = o.items.map((i) => ({ id_detalle: i.id_detalle, cantidad: Number((cant[i.id_detalle] ?? '').replace(',', '.')) || 0 }))
+    const items = o.items.map((i) => ({ id_detalle: i.id_detalle, cantidad: aNumero(cant[i.id_detalle] ?? '') ?? 0 }))
     try {
       const r = recibir ? await ordenesApi.recibir(o.id_orden, items, texto, usuario.id) : await ordenesApi.devolver(o.id_orden, items, texto, usuario.id)
       listo(recibir ? `Mercancía recibida: ${r.numero} quedó ${nombreEstadoOrden[r.estado].toLowerCase()}` : `Devolución registrada en ${r.numero}`)
@@ -194,29 +211,34 @@ function FormCantidades({ o, modo, listo, cancelar }: { o: OrdenCompra; modo: 'r
   }
 
   return (
-    <form className="panel formulario" style={{ maxWidth: 'none', marginBottom: 20 }} onSubmit={enviar} noValidate>
+    <form className="panel formulario" style={{ maxWidth: 'none', marginBottom: 20 }} onSubmit={enviar} onBlur={v.alSalir} noValidate>
       <h2>{recibir ? 'Recibir mercancía' : 'Devolver a proveedor'}</h2>
       {error && <ErrorCaja error={error} />}
       <table className="tabla recepcion-tabla">
         <thead><tr><th>Producto</th><th className="num">{recibir ? 'Pendiente' : 'Devolvible'}</th><th className="num">{recibir ? 'Cantidad recibida' : 'Cantidad a devolver'}</th></tr></thead>
         <tbody>
-          {o.items.filter((i) => disponible(i) > 0).map((i) => {
+          {conSaldo.map((i) => {
             const p = productoPorSku.get(i.sku)!
+            const clave = `c-${i.id_detalle}`
             return (
               <tr key={i.id_detalle}>
                 <td>{p.nombre}<span className="secundario">{i.sku}</span></td>
                 <td className="num cifra">{cantidad(disponible(i), p.unidad_medida)}</td>
                 <td className="num">
-                  <label className="solo-lector" htmlFor={`c-${i.id_detalle}`}>Cantidad de {p.nombre}</label>
-                  <input id={`c-${i.id_detalle}`} className="entrada" inputMode="decimal" value={cant[i.id_detalle] ?? ''} placeholder="0" onChange={(e) => setCant({ ...cant, [i.id_detalle]: e.target.value })} />
+                  <label className="solo-lector" htmlFor={clave}>Cantidad de {p.nombre}</label>
+                  <input id={clave} name={clave} className="entrada" inputMode="decimal" maxLength={14} value={cant[i.id_detalle] ?? ''} placeholder="0"
+                    aria-invalid={!!v.visibles[clave] || undefined} aria-describedby={v.visibles[clave] ? `${clave}-error` : undefined}
+                    onChange={(e) => setCant({ ...cant, [i.id_detalle]: e.target.value })} />
+                  <ErrorCelda id={`${clave}-error`} error={v.visibles[clave]} />
                 </td>
               </tr>
             )
           })}
         </tbody>
       </table>
-      <Campo id="c-texto" etiqueta={recibir ? 'Observaciones' : 'Motivo'} opcional={recibir}>
-        <textarea id="c-texto" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={recibir ? 'Temperatura de llegada, novedades del despacho' : 'Producto no conforme o en mal estado'} />
+      <ErrorCelda id="c-items-error" error={v.visibles.items} />
+      <Campo id="c-texto" etiqueta={recibir ? 'Observaciones' : 'Motivo'} opcional={recibir} error={v.visibles.texto}>
+        <textarea id="c-texto" name="texto" maxLength={recibir ? 300 : 200} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={recibir ? 'Temperatura de llegada, novedades del despacho' : 'Producto no conforme o en mal estado'} />
       </Campo>
       <div className="acciones-separadas">
         <BotonEnvio enviando={enviando}>{recibir ? 'Registrar recepción' : 'Registrar devolución'}</BotonEnvio>
@@ -230,17 +252,19 @@ function FormAnular({ o, listo, cancelar }: { o: OrdenCompra; listo: (t: string)
   const [motivo, setMotivo] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  async function enviar(e: FormEvent) {
+  const v = useValidacion(validar({ motivo: [reglas.requerido(motivo, 'Indica por qué se anula la orden.'), reglas.largo(motivo, 10, 200)] }))
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
-    try { await ordenesApi.anular(o.id_orden, motivo); listo(`${o.numero} anulada`) } catch (err) { setError(err as Error) } finally { setEnviando(false) }
+    try { await ordenesApi.anular(o.id_orden, motivo.trim()); listo(`${o.numero} anulada`) } catch (err) { setError(err as Error) } finally { setEnviando(false) }
   }
   return (
-    <form className="panel formulario" style={{ marginBottom: 20 }} onSubmit={enviar} noValidate>
+    <form className="panel formulario" style={{ marginBottom: 20 }} onSubmit={enviar} onBlur={v.alSalir} noValidate>
       <h2>Anular {o.numero}</h2>
       <div className="aviso aviso-error"><TriangleAlert size={20} aria-hidden /><div><strong>No se puede deshacer</strong><p>La orden queda en el historial con su motivo y ya no se podrá recibir.</p></div></div>
-      <Campo id="a-motivo" etiqueta="Motivo de la anulación" error={erroresCampo(error).motivo}>
-        <textarea id="a-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+      <Campo id="a-motivo" etiqueta="Motivo de la anulación" error={v.visibles.motivo ?? erroresCampo(error).motivo} ayuda="Entre 10 y 200 caracteres.">
+        <textarea id="a-motivo" name="motivo" maxLength={200} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
       </Campo>
       <div className="acciones-separadas">
         <BotonEnvio enviando={enviando} className="btn btn-peligro">Anular orden</BotonEnvio>
@@ -262,18 +286,33 @@ export function NuevaOrden() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const sumin = useConsulta(() => proveedoresApi.productos(proveedor), [proveedor])
-  const total = items.reduce((a, i) => a + (Number(i.cantidad) || 0) * (Number(i.precio) || 0), 0)
-  const campos = erroresCampo(error)
+  const num = (s: string) => aNumero(s) ?? 0
+  const total = items.reduce((a, i) => a + num(i.cantidad) * num(i.precio), 0)
+
+  const repetido = (sku: string) => !!sku && items.filter((i) => i.sku === sku).length > 1
+  const v = useValidacion(validar({
+    id_proveedor: [reglas.requerido(proveedor, 'Elige un proveedor activo.')],
+    ...Object.fromEntries(items.flatMap((it, n) => {
+      const p = productoPorSku.get(it.sku)
+      return [
+        [`item-${n}-sku`, [reglas.requerido(it.sku, 'Elige un producto o quita la fila.'), repetido(it.sku) && 'Este producto ya está en otra fila.']],
+        [`item-${n}-cantidad`, [reglas.numero(it.cantidad, { requerido: true, mensajeVacio: 'Escribe la cantidad.', decimales: p ? decimalesPorUnidad(p.unidad_medida) : 3, mayorQueCero: true, max: 100000, mensajeMax: 'Revisa la cantidad: supera 100.000.' })]],
+        [`item-${n}-precio`, [reglas.numero(it.precio, { requerido: true, mensajeVacio: 'Escribe el precio.', decimales: 2, mayorQueCero: true })]],
+      ]
+    })),
+  }))
+  const campos = { ...erroresCampo(error), ...v.visibles }
 
   const fijar = (n: number, cambio: Partial<{ sku: string; cantidad: string; precio: string }>) =>
     setItems(items.map((it, i) => (i === n ? { ...it, ...cambio } : it)))
 
-  async function enviar(e: FormEvent) {
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
     try {
-      const o = await ordenesApi.crear({ id_proveedor: proveedor, id_bodega_destino: bodega, items: items.map((i) => ({ sku: i.sku, cantidad: Number(i.cantidad) || 0, precio_unitario: Number(i.precio) || 0 })) }, usuario.id)
+      const o = await ordenesApi.crear({ id_proveedor: proveedor, id_bodega_destino: bodega, items: items.map((i) => ({ sku: i.sku, cantidad: num(i.cantidad), precio_unitario: num(i.precio) })) }, usuario.id)
       avisar(`${o.numero} creada en borrador`, { a: `/ordenes-compra/${o.id_orden}`, texto: 'Ver orden' })
       navegar(`/ordenes-compra/${o.id_orden}`)
     } catch (err) {
@@ -288,8 +327,8 @@ export function NuevaOrden() {
   return (
     <>
       <Encabezado migas={<><Link to="/ordenes-compra">Órdenes de compra</Link><span aria-hidden>/</span><span>Nueva</span></>} titulo="Nueva orden de compra" descripcion="Se guarda en borrador; el gerente o el administrador la aprueban antes de recibirla." />
-      <form className="panel formulario" style={{ maxWidth: 960 }} onSubmit={enviar} noValidate>
-        {error && !Object.keys(campos).length && <ErrorCaja error={error} />}
+      <form className="panel formulario" style={{ maxWidth: 960 }} onSubmit={enviar} onBlur={v.alSalir} noValidate>
+        {error && !Object.keys(erroresCampo(error)).length && <ErrorCaja error={error} />}
         <div className="fila-campos">
           <Campo id="o-prov" etiqueta="Proveedor" error={campos.id_proveedor}>
             <select id="o-prov" value={proveedor} onChange={(e) => { setProveedor(Number(e.target.value)); setItems([{ sku: '', cantidad: '', precio: '' }]) }}>
@@ -305,25 +344,38 @@ export function NuevaOrden() {
         <table className="tabla recepcion-tabla">
           <thead><tr><th>Producto</th><th className="num">Cantidad</th><th className="num">Precio unitario</th><th className="num">Subtotal</th><th><span className="solo-lector">Quitar</span></th></tr></thead>
           <tbody>
-            {items.map((it, n) => (
+            {items.map((it, n) => {
+              const k = { sku: `item-${n}-sku`, cantidad: `item-${n}-cantidad`, precio: `item-${n}-precio` }
+              const aria = (clave: string) => ({ 'aria-invalid': !!campos[clave] || undefined, 'aria-describedby': campos[clave] ? `${clave}-error` : undefined })
+              return (
               <tr key={n}>
                 <td>
                   <label className="solo-lector" htmlFor={`o-sku-${n}`}>Producto {n + 1}</label>
-                  <select id={`o-sku-${n}`} className="entrada" value={it.sku} onChange={(e) => fijar(n, { sku: e.target.value, precio: String(sumin.datos?.find((s) => s.sku === e.target.value)?.precio_compra ?? '') })}>
+                  <select id={`o-sku-${n}`} name={k.sku} className="entrada" value={it.sku} {...aria(k.sku)} onChange={(e) => fijar(n, { sku: e.target.value, precio: String(sumin.datos?.find((s) => s.sku === e.target.value)?.precio_compra ?? '') })}>
                     <option value="">Elige un producto del proveedor</option>
                     {(sumin.datos ?? []).map((s) => <option key={s.sku} value={s.sku}>{s.sku} · {productoPorSku.get(s.sku)!.nombre}</option>)}
                   </select>
+                  <ErrorCelda id={`${k.sku}-error`} error={campos[k.sku]} />
                 </td>
-                <td className="num"><label className="solo-lector" htmlFor={`o-c-${n}`}>Cantidad</label><input id={`o-c-${n}`} className="entrada" inputMode="decimal" value={it.cantidad} onChange={(e) => fijar(n, { cantidad: e.target.value })} /></td>
-                <td className="num"><label className="solo-lector" htmlFor={`o-p-${n}`}>Precio</label><input id={`o-p-${n}`} className="entrada" inputMode="decimal" value={it.precio} onChange={(e) => fijar(n, { precio: e.target.value })} /></td>
-                <td className="num cifra">{dinero((Number(it.cantidad) || 0) * (Number(it.precio) || 0))}</td>
+                <td className="num">
+                  <label className="solo-lector" htmlFor={`o-c-${n}`}>Cantidad</label>
+                  <input id={`o-c-${n}`} name={k.cantidad} className="entrada" inputMode="decimal" maxLength={14} value={it.cantidad} {...aria(k.cantidad)} onChange={(e) => fijar(n, { cantidad: e.target.value })} />
+                  <ErrorCelda id={`${k.cantidad}-error`} error={campos[k.cantidad]} />
+                </td>
+                <td className="num">
+                  <label className="solo-lector" htmlFor={`o-p-${n}`}>Precio</label>
+                  <input id={`o-p-${n}`} name={k.precio} className="entrada" inputMode="decimal" maxLength={14} value={it.precio} {...aria(k.precio)} onChange={(e) => fijar(n, { precio: e.target.value })} />
+                  <ErrorCelda id={`${k.precio}-error`} error={campos[k.precio]} />
+                </td>
+                <td className="num cifra">{dinero(num(it.cantidad) * num(it.precio))}</td>
                 <td>{items.length > 1 && <button type="button" className="btn btn-fantasma btn-sm" aria-label={`Quitar producto ${n + 1}`} onClick={() => setItems(items.filter((_, i) => i !== n))}><Trash2 size={18} aria-hidden /></button>}</td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
           <tfoot><tr><td colSpan={3}><strong>Total</strong></td><td className="num cifra"><strong>{dinero(total)}</strong></td><td /></tr></tfoot>
         </table>
-        {campos.items && <p className="error-campo" style={{ color: 'var(--rojo)', fontWeight: 600 }}>{campos.items[0]}</p>}
+        <ErrorCelda id="o-items-error" error={campos.items} />
         <div><button type="button" className="btn btn-sm" onClick={() => setItems([...items, { sku: '', cantidad: '', precio: '' }])}><Plus size={16} aria-hidden />Agregar producto</button></div>
         <div className="acciones-separadas">
           <BotonEnvio enviando={enviando}>Guardar en borrador</BotonEnvio>

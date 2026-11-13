@@ -11,6 +11,7 @@ import { dinero, fechaHora, numeroMovimiento } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 import type { Rol } from '../api/types'
 import { AltaUsuario } from './Altas'
+import { reglas, useValidacion, validar } from '../lib/validacion'
 
 const ROLES: Rol[] = ['ADMINISTRADOR', 'JEFE_BODEGA', 'COMPRAS', 'GERENTE']
 const OPERACIONES: Array<[Operacion, string]> = [
@@ -85,21 +86,33 @@ export function Perfil() {
   const avisar = useAvisos()
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
+  const [confirmar, setConfirmar] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const campos = erroresCampo(error)
-  async function enviar(e: FormEvent) {
+  const v = useValidacion(validar({
+    password_actual: [reglas.requerido(actual, 'Escribe tu contraseña actual.')],
+    password_nueva: [reglas.requerido(nueva, 'Escribe la contraseña nueva.'), reglas.password(nueva), !!nueva && nueva === actual && 'La contraseña nueva debe ser distinta de la actual.'],
+    confirmar: [reglas.requerido(confirmar, 'Repite la contraseña nueva.'), !!confirmar && confirmar !== nueva && 'No coincide con la contraseña nueva.'],
+  }))
+  const campos = { ...erroresCampo(error), ...v.visibles }
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
-    try { await auth.cambiarPassword(actual, nueva); avisar('Contraseña actualizada'); setActual(''); setNueva('') } catch (err) { setError(err as Error) } finally { setEnviando(false) }
+    try {
+      await auth.cambiarPassword(actual, nueva)
+      avisar('Contraseña actualizada')
+      setActual(''); setNueva(''); setConfirmar(''); v.reiniciar()
+    } catch (err) { setError(err as Error) } finally { setEnviando(false) }
   }
   return (
     <>
       <Encabezado titulo="Cambiar contraseña" descripcion={`${usuario.nombre} · ${usuario.email}`} />
-      <form className="panel formulario" onSubmit={enviar} noValidate>
-        <Campo id="pw-actual" etiqueta="Contraseña actual" error={campos.password_actual}><input id="pw-actual" type="password" autoComplete="current-password" value={actual} onChange={(e) => setActual(e.target.value)} /></Campo>
-        <Campo id="pw-nueva" etiqueta="Contraseña nueva" error={campos.password_nueva} ayuda="Mínimo 8 caracteres."><input id="pw-nueva" type="password" autoComplete="new-password" value={nueva} onChange={(e) => setNueva(e.target.value)} /></Campo>
+      <form className="panel formulario" onSubmit={enviar} onBlur={v.alSalir} noValidate>
+        <Campo id="pw-actual" etiqueta="Contraseña actual" error={campos.password_actual}><input id="pw-actual" name="password_actual" type="password" autoComplete="current-password" maxLength={128} value={actual} onChange={(e) => setActual(e.target.value)} /></Campo>
+        <Campo id="pw-nueva" etiqueta="Contraseña nueva" error={campos.password_nueva} ayuda="Mínimo 8 caracteres, con letras y números."><input id="pw-nueva" name="password_nueva" type="password" autoComplete="new-password" maxLength={128} value={nueva} onChange={(e) => setNueva(e.target.value)} /></Campo>
+        <Campo id="pw-confirmar" etiqueta="Repite la contraseña nueva" error={campos.confirmar}><input id="pw-confirmar" name="confirmar" type="password" autoComplete="new-password" maxLength={128} value={confirmar} onChange={(e) => setConfirmar(e.target.value)} /></Campo>
         <div className="acciones-separadas"><BotonEnvio enviando={enviando}>Guardar contraseña</BotonEnvio></div>
       </form>
     </>

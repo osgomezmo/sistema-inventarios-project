@@ -11,6 +11,7 @@ import { useBodega } from '../contexto/Bodega'
 import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, Vacio, erroresCampo } from '../componentes/ui'
 import { cantidad, fechaHora, numeroMovimiento, numeroTraslado, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
+import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 
 export function Traslados() {
   const usuario = useUsuario()
@@ -64,17 +65,32 @@ export function NuevoTraslado() {
   const [motivo, setMotivo] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const campos = erroresCampo(error)
   const p = productoPorSku.get(sku)
   const saldos = useMemo(() => saldosActuales().filter((s) => s.sku === sku), [sku])
   const disponible = saldos.find((s) => s.id_bodega === origen)?.cantidad ?? 0
 
-  async function enviar(e: FormEvent) {
+  const v = useValidacion(validar({
+    sku: [reglas.requerido(sku, 'Elige el producto que se traslada.')],
+    id_bodega_destino: [origen === destino && 'Elige una bodega distinta a la de origen.'],
+    cantidad: [reglas.numero(cant, {
+      requerido: true,
+      mensajeVacio: 'Escribe la cantidad a trasladar.',
+      decimales: p ? decimalesPorUnidad(p.unidad_medida) : 3,
+      mayorQueCero: true,
+      max: p ? disponible : undefined,
+      mensajeMax: p && `En la bodega de origen solo hay ${cantidad(disponible, p.unidad_medida)}.`,
+    })],
+    motivo: [reglas.largo(motivo, 0, 200)],
+  }))
+  const campos = { ...erroresCampo(error), ...v.visibles }
+
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
     try {
-      const t = await trasladosApi.crear({ sku, id_bodega_origen: origen, id_bodega_destino: destino, cantidad: Number(cant.replace(',', '.')), motivo }, usuario.id)
+      const t = await trasladosApi.crear({ sku, id_bodega_origen: origen, id_bodega_destino: destino, cantidad: aNumero(cant) ?? 0, motivo: motivo.trim() }, usuario.id)
       avisar(`${numeroTraslado(t.id_traslado)} registrado: ${cantidad(t.cantidad, p!.unidad_medida)} de ${bodegaPorId.get(origen)!.codigo} a ${bodegaPorId.get(destino)!.codigo}`)
       navegar('/traslados')
     } catch (err) {
@@ -90,10 +106,10 @@ export function NuevoTraslado() {
     <>
       <Encabezado migas={<><Link to="/traslados">Traslados</Link><span aria-hidden>/</span><span>Nuevo</span></>} titulo="Nuevo traslado" />
       <div className="dos-columnas">
-        <form className="panel formulario" onSubmit={enviar} noValidate>
-          {error && !Object.keys(campos).length && <ErrorCaja error={error} />}
+        <form className="panel formulario" onSubmit={enviar} onBlur={v.alSalir} noValidate>
+          {error && !Object.keys(erroresCampo(error)).length && <ErrorCaja error={error} />}
           <Campo id="t-sku" etiqueta="Producto" error={campos.sku}>
-            <select id="t-sku" value={sku} onChange={(e) => setSku(e.target.value)}>
+            <select id="t-sku" name="sku" value={sku} onChange={(e) => setSku(e.target.value)}>
               <option value="">Elige un producto</option>
               {productos.filter((x) => x.estado === 'ACTIVO').map((x) => <option key={x.sku} value={x.sku}>{x.sku} · {x.nombre}</option>)}
             </select>
@@ -105,16 +121,16 @@ export function NuevoTraslado() {
               </select>
             </Campo>
             <Campo id="t-destino" etiqueta="Bodega de destino" error={campos.id_bodega_destino}>
-              <select id="t-destino" value={destino} onChange={(e) => setDestino(Number(e.target.value))}>
+              <select id="t-destino" name="id_bodega_destino" value={destino} onChange={(e) => setDestino(Number(e.target.value))}>
                 {activas.map((b) => <option key={b.id_bodega} value={b.id_bodega}>{b.codigo} · {b.nombre}</option>)}
               </select>
             </Campo>
           </div>
           <Campo id="t-cant" etiqueta={`Cantidad${p ? ` (${unidad(p.unidad_medida)})` : ''}`} error={campos.cantidad} ayuda={p ? `Disponible en origen: ${cantidad(disponible, p.unidad_medida)}` : undefined}>
-            <input id="t-cant" inputMode="decimal" value={cant} onChange={(e) => setCant(e.target.value)} />
+            <input id="t-cant" name="cantidad" inputMode="decimal" maxLength={14} value={cant} onChange={(e) => setCant(e.target.value)} />
           </Campo>
-          <Campo id="t-motivo" etiqueta="Motivo" opcional>
-            <textarea id="t-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Reposición de la bodega de despacho" />
+          <Campo id="t-motivo" etiqueta="Motivo" opcional error={campos.motivo}>
+            <textarea id="t-motivo" name="motivo" maxLength={200} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Reposición de la bodega de despacho" />
           </Campo>
           <div className="acciones-separadas">
             <BotonEnvio enviando={enviando}>Registrar traslado</BotonEnvio>

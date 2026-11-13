@@ -12,6 +12,7 @@ import { useAvisos } from '../contexto/Avisos'
 import { BotonEnvio, CantidadMov, Campo, Cargando, Encabezado, ErrorCaja, Paginacion, TipoMov, Vacio, erroresCampo } from '../componentes/ui'
 import { cantidad, dinero, fechaHora, nombreTipo, numeroMovimiento, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
+import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 
 const TIPOS = Object.keys(nombreTipo) as TipoMovimiento[]
 
@@ -27,7 +28,8 @@ export function Movimientos() {
     hasta: params.get('hasta') || undefined,
     page: Number(params.get('page') ?? 1),
   }
-  const c = useConsulta(() => movimientosApi.listar({ ...f, per_page: 20 }), [params.toString(), idBodega])
+  const errorRango = reglas.rangoFechas(f.desde ?? '', f.hasta ?? '')
+  const c = useConsulta(() => movimientosApi.listar({ ...f, hasta: errorRango ? undefined : f.hasta, per_page: 20 }), [params.toString(), idBodega])
   const cambiar = (clave: string, valor: string) => {
     const p = new URLSearchParams(params)
     if (valor) p.set(clave, valor); else p.delete(clave)
@@ -68,10 +70,9 @@ export function Movimientos() {
           <label htmlFor="f-desde">Desde</label>
           <input id="f-desde" type="date" value={f.desde ?? ''} onChange={(e) => cambiar('desde', e.target.value)} />
         </div>
-        <div className="campo">
-          <label htmlFor="f-hasta">Hasta</label>
-          <input id="f-hasta" type="date" value={f.hasta ?? ''} onChange={(e) => cambiar('hasta', e.target.value)} />
-        </div>
+        <Campo id="f-hasta" etiqueta="Hasta" error={errorRango ? [errorRango] : undefined}>
+          <input id="f-hasta" type="date" min={f.desde} value={f.hasta ?? ''} onChange={(e) => cambiar('hasta', e.target.value)} />
+        </Campo>
       </div>
 
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
@@ -130,19 +131,37 @@ export function NuevoMovimiento() {
   const [documento, setDocumento] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const campos = erroresCampo(error)
 
   const p = productoPorSku.get(sku)
   const saldo = useMemo(() => saldosActuales().find((s) => s.sku === sku && s.id_bodega === bodega), [sku, bodega, enviando])
-  const n = Number(cant.replace(',', '.'))
+  const n = aNumero(cant) ?? NaN
   const resultado = saldo && n > 0 ? (tipo === 'AJUSTE_POSITIVO' ? saldo.cantidad + n : saldo.cantidad - n) : null
+  const disponible = saldo?.cantidad ?? 0
+  const esSalida = tipo !== 'AJUSTE_POSITIVO'
 
-  async function enviar(e: FormEvent) {
+  const v = useValidacion(validar({
+    sku: [reglas.requerido(sku, tipo === 'SALIDA' ? 'Elige el producto que sale.' : 'Elige el producto que se ajusta.')],
+    cantidad: [reglas.numero(cant, {
+      requerido: true,
+      mensajeVacio: 'Escribe la cantidad.',
+      decimales: p ? decimalesPorUnidad(p.unidad_medida) : 3,
+      mayorQueCero: true,
+      max: esSalida && p ? disponible : undefined,
+      mensajeMax: p && `Solo hay ${cantidad(disponible, p.unidad_medida)} en esta bodega; ninguna salida puede dejar el saldo en negativo.`,
+    })],
+    costo_unitario: tipo === 'AJUSTE_POSITIVO' ? [reglas.numero(costo, { decimales: 2, min: 0 })] : [],
+    documento_referencia: tipo === 'SALIDA' ? [reglas.requerido(documento, 'Indica el documento del POS que respalda la salida.'), reglas.largo(documento, 4, 60)] : [],
+    motivo: tipo === 'SALIDA' ? [reglas.largo(motivo, 0, 200)] : [reglas.requerido(motivo, 'Todo ajuste exige un motivo.'), reglas.largo(motivo, 5, 200)],
+  }))
+  const campos = { ...erroresCampo(error), ...v.visibles }
+
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
     try {
-      const m = await movimientosApi.crear({ sku, id_bodega: bodega, tipo, cantidad: n, costo_unitario: costo ? Number(costo) : undefined, motivo, documento_referencia: documento }, usuario.id)
+      const m = await movimientosApi.crear({ sku, id_bodega: bodega, tipo, cantidad: n, costo_unitario: costo ? aNumero(costo) ?? undefined : undefined, motivo: motivo.trim(), documento_referencia: documento.trim() }, usuario.id)
       avisar(`${numeroMovimiento(m.id_movimiento)} registrado: ${nombreTipo[m.tipo].toLowerCase()} de ${cantidad(m.cantidad, p!.unidad_medida)}`, { a: `/kardex?sku=${m.sku}&id_bodega=${m.id_bodega}`, texto: 'Ver kardex' })
       navegar('/movimientos')
     } catch (err) {
@@ -158,8 +177,8 @@ export function NuevoMovimiento() {
     <>
       <Encabezado migas={<><Link to="/movimientos">Movimientos</Link><span aria-hidden>/</span><span>Nuevo</span></>} titulo="Registrar movimiento" descripcion="Las entradas por compra llegan solas al recibir una orden; aquí se registran salidas y ajustes." />
       <div className="dos-columnas">
-        <form className="panel formulario" onSubmit={enviar} noValidate>
-          {error && !Object.keys(campos).length && <ErrorCaja error={error} />}
+        <form className="panel formulario" onSubmit={enviar} onBlur={v.alSalir} noValidate>
+          {error && !Object.keys(erroresCampo(error)).length && <ErrorCaja error={error} />}
           <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="etiqueta" style={{ marginBottom: 6 }}>Tipo de movimiento</legend>
             <div className="opciones-tipo">
@@ -171,7 +190,7 @@ export function NuevoMovimiento() {
           </fieldset>
           <div className="fila-campos">
             <Campo id="m-sku" etiqueta="Producto" error={campos.sku}>
-              <select id="m-sku" value={sku} onChange={(e) => setSku(e.target.value)} required>
+              <select id="m-sku" name="sku" value={sku} onChange={(e) => setSku(e.target.value)}>
                 <option value="">Elige un producto</option>
                 {productos.filter((x) => x.estado === 'ACTIVO').map((x) => <option key={x.sku} value={x.sku}>{x.sku} · {x.nombre}</option>)}
               </select>
@@ -184,21 +203,21 @@ export function NuevoMovimiento() {
           </div>
           <div className="fila-campos">
             <Campo id="m-cant" etiqueta={`Cantidad${p ? ` (${unidad(p.unidad_medida)})` : ''}`} error={campos.cantidad} ayuda={p && p.unidad_medida !== 'UNIDAD' ? 'Hasta tres decimales.' : undefined}>
-              <input id="m-cant" inputMode="decimal" value={cant} onChange={(e) => setCant(e.target.value)} />
+              <input id="m-cant" name="cantidad" inputMode="decimal" maxLength={14} value={cant} onChange={(e) => setCant(e.target.value)} />
             </Campo>
             {tipo === 'AJUSTE_POSITIVO' && (
-              <Campo id="m-costo" etiqueta="Costo unitario" opcional ayuda="Si lo dejas vacío se usa el costo promedio vigente.">
-                <input id="m-costo" inputMode="decimal" value={costo} onChange={(e) => setCosto(e.target.value)} />
+              <Campo id="m-costo" etiqueta="Costo unitario" opcional error={campos.costo_unitario} ayuda="Si lo dejas vacío se usa el costo promedio vigente.">
+                <input id="m-costo" name="costo_unitario" inputMode="decimal" maxLength={14} value={costo} onChange={(e) => setCosto(e.target.value)} />
               </Campo>
             )}
             {tipo === 'SALIDA' && (
               <Campo id="m-doc" etiqueta="Documento del POS" error={campos.documento_referencia} ayuda="Por ejemplo, el cierre de caja o la factura.">
-                <input id="m-doc" value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Cierre POS 29/10 turno 2" />
+                <input id="m-doc" name="documento_referencia" maxLength={60} value={documento} onChange={(e) => setDocumento(e.target.value)} placeholder="Cierre POS 29/10 turno 2" />
               </Campo>
             )}
           </div>
-          <Campo id="m-motivo" etiqueta="Motivo" opcional={tipo === 'SALIDA'} error={campos.motivo}>
-            <textarea id="m-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={tipo === 'SALIDA' ? 'Opcional' : 'Merma: producto en mal estado'} />
+          <Campo id="m-motivo" etiqueta="Motivo" opcional={tipo === 'SALIDA'} error={campos.motivo} ayuda={tipo === 'SALIDA' ? undefined : 'Entre 5 y 200 caracteres.'}>
+            <textarea id="m-motivo" name="motivo" maxLength={200} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={tipo === 'SALIDA' ? 'Opcional' : 'Merma: producto en mal estado'} />
           </Campo>
           <div className="acciones-separadas">
             <BotonEnvio enviando={enviando}>Registrar movimiento</BotonEnvio>

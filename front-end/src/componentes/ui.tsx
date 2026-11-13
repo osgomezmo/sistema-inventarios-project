@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, CircleAlert, Inbox, LoaderCircle, RotateCcw } from 'lucide-react'
 import type { EstadoOrden, MetaPaginacion, Movimiento, Saldo, TipoMovimiento } from '../api/types'
 import { ApiError } from '../api/cliente'
@@ -73,6 +73,12 @@ function tituloError(e: ApiError): string {
   }
 }
 
+/** Error corto para una celda de tabla (formularios con filas, como los ítems de una orden). */
+export function ErrorCelda({ id, error }: { id: string; error?: string[] }) {
+  if (!error?.length) return null
+  return <span className="error-celda" id={id} role="alert"><CircleAlert size={14} aria-hidden />{error[0]}</span>
+}
+
 /** Errores por campo de una respuesta 422 o 409. */
 export const erroresCampo = (e: unknown): Record<string, string[]> =>
   e instanceof ApiError ? e.cuerpo.error.detalles ?? {} : {}
@@ -108,12 +114,20 @@ export function Campo({ id, etiqueta, error, ayuda, opcional, children }: {
   opcional?: boolean
   children: ReactNode
 }) {
+  const conError = !!error?.length
+  // El control recibe aria-invalid y queda ligado a su mensaje de error o de ayuda.
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        'aria-invalid': conError || undefined,
+        'aria-describedby': conError ? `${id}-error` : ayuda ? `${id}-ayuda` : undefined,
+      })
+    : children
   return (
-    <div className="campo" data-error={error?.length ? 'true' : undefined}>
+    <div className="campo" data-error={conError ? 'true' : undefined}>
       <label htmlFor={id}>{etiqueta}{opcional && <span className="opcional"> (opcional)</span>}</label>
-      {children}
+      {control}
       {ayuda && !error?.length && <span className="ayuda" id={`${id}-ayuda`}>{ayuda}</span>}
-      {error?.map((m) => <span key={m} className="error-campo" id={`${id}-error`}><CircleAlert size={16} aria-hidden />{m}</span>)}
+      {conError && <span className="error-campo" id={`${id}-error`} role="alert"><CircleAlert size={16} aria-hidden />{error![0]}</span>}
     </div>
   )
 }
