@@ -180,3 +180,49 @@ def editar_producto(id_producto):
         producto = repo.obtener(cursor, id_producto)
 
     return jsonify(producto)
+
+
+@productos_bp.post("/productos/<int:id_producto>/inactivar")
+def inactivar_producto(id_producto):
+    # El cuerpo, si viene, se ignora. Solo se bloquea la fila del producto.
+    with transaccion() as cursor:
+        producto = repo.obtener_bloqueando(cursor, id_producto)
+        if producto is None:
+            raise no_existe()
+        # Idempotente: si ya está inactivo, se responde sin cambios.
+        if producto["estado"] != "INACTIVO":
+            repo.actualizar_estado(cursor, id_producto, "INACTIVO")
+            producto["estado"] = "INACTIVO"
+    return jsonify(producto)
+
+
+@productos_bp.post("/productos/<int:id_producto>/activar")
+def activar_producto(id_producto):
+    # El cuerpo, si viene, se ignora.
+    with transaccion() as cursor:
+        producto = repo.obtener(cursor, id_producto)
+        if producto is None:
+            raise no_existe()
+        if producto["estado"] == "ACTIVO":
+            return jsonify(producto)
+
+        # Primero la categoría (FOR SHARE) y luego el producto (FOR UPDATE): el mismo
+        # orden que PUT e inactivar categoría, para no cruzar bloqueos.
+        id_categoria = producto["id_categoria"]
+        categoria = repo_categorias.obtener_compartido(cursor, id_categoria)
+        producto = repo.obtener_bloqueando(cursor, id_producto)
+        if producto["id_categoria"] != id_categoria:
+            raise ApiError(
+                "CONFLICTO",
+                "El producto cambió de categoría mientras se activaba; intenta de nuevo.",
+                409,
+            )
+        # Otra petición pudo activarlo mientras se esperaba el bloqueo.
+        if producto["estado"] == "ACTIVO":
+            return jsonify(producto)
+        if categoria is None or categoria["estado"] != "ACTIVO":
+            raise ApiError("CONFLICTO", "La categoría del producto está inactiva.", 409)
+
+        repo.actualizar_estado(cursor, id_producto, "ACTIVO")
+        producto["estado"] = "ACTIVO"
+    return jsonify(producto)

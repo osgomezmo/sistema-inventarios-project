@@ -107,3 +107,9 @@ def actualizar(cursor, id_producto, nombre, descripcion, marca, id_categoria,
         (nombre, descripcion, marca, id_categoria, unidad_medida, precio_venta,
          stock_minimo, id_producto),
     )
+
+
+def actualizar_estado(cursor, id_producto, estado):
+    cursor.execute(
+        "UPDATE productos SET estado = %s WHERE id_producto = %s", (estado, id_producto)
+    )
