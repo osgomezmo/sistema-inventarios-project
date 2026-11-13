@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 from flask import Flask
 
@@ -5,8 +7,10 @@ from app.errors import ApiError
 from app.paginacion import leer_paginacion, respuesta_paginada
 from app.validacion import (
     Errores,
+    decimal_opcional,
     entero_opcional,
     leer_json,
+    lista_separada_por_comas,
     opcion,
     texto_obligatorio,
     texto_opcional,
@@ -211,3 +215,54 @@ def test_leer_json_invalido_responde_400(kwargs):
         with pytest.raises(ApiError) as info:
             leer_json()
     assert (info.value.status, info.value.codigo) == (400, "PETICION_INVALIDA")
+
+
+@pytest.mark.parametrize(
+    "valor, esperado, hay_error",
+    [
+        (None, None, False),
+        ("", None, False),
+        ("0", Decimal("0"), False),
+        ("12", Decimal("12"), False),
+        (" 12.50 ", Decimal("12.50"), False),
+        (3, Decimal("3"), False),
+        (2.5, Decimal("2.5"), False),
+        ("12.505", None, True),
+        ("-1", None, True),
+        ("abc", None, True),
+        ("nan", None, True),
+        ("inf", None, True),
+        ("1e3", None, True),
+        (float("nan"), None, True),
+        (float("inf"), None, True),
+        (True, None, True),
+    ],
+)
+def test_decimal_opcional(valor, esperado, hay_error):
+    errores = Errores()
+    resultado = decimal_opcional(errores, {"precio": valor}, "precio", minimo=0, decimales=2)
+    assert resultado == esperado
+    assert bool(errores) is hay_error
+    if esperado is not None:
+        assert isinstance(resultado, Decimal)
+
+
+@pytest.mark.parametrize(
+    "valor, esperado, hay_error",
+    [
+        (None, None, False),
+        ("", [], False),
+        (" , ,", [], False),
+        ("A", ["A"], False),
+        (" A , B,,C ", ["A", "B", "C"], False),
+        (",".join(["X"] * 3), ["X"] * 3, False),
+        (",".join(["X"] * 4), None, True),
+        ("A,BBBBBB", None, True),
+        (["A"], None, True),
+    ],
+)
+def test_lista_separada_por_comas(valor, esperado, hay_error):
+    errores = Errores()
+    resultado = lista_separada_por_comas(errores, {"skus": valor}, "skus", 3, 5)
+    assert resultado == esperado
+    assert bool(errores) is hay_error

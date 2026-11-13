@@ -6,6 +6,7 @@ revisan y devuelven el valor ya normalizado. Al final se llama a
 """
 
 import re
+from decimal import Decimal, InvalidOperation
 
 from flask import request
 
@@ -13,6 +14,7 @@ from app.errors import ApiError
 
 MENSAJE_VALIDACION = "Revisa los campos enviados."
 PATRON_ENTERO = re.compile(r"-?\d+")
+PATRON_DECIMAL = re.compile(r"-?\d+(\.\d+)?")
 
 
 class Errores:
@@ -112,3 +114,53 @@ def opcion(errores, datos, campo, opciones, obligatorio=False):
         errores.agregar(campo, f"Debe ser uno de: {', '.join(opciones)}.")
         return None
     return valor
+
+
+def decimal_opcional(errores, datos, campo, minimo=None, decimales=None):
+    """Número decimal de JSON o de la query string, devuelto como Decimal.
+
+    Acepta 12, 12.5 y "12.50"; rechaza true, "abc", "nan", "inf" y la notación
+    científica. Si se indica `decimales`, no admite más cifras decimales.
+    """
+    valor = datos.get(campo)
+    if valor is None or valor == "":
+        return None
+    numero = None
+    if isinstance(valor, bool):
+        numero = None
+    elif isinstance(valor, (int, float)):
+        try:
+            numero = Decimal(str(valor))
+        except InvalidOperation:
+            numero = None
+    elif isinstance(valor, str) and PATRON_DECIMAL.fullmatch(valor.strip()):
+        numero = Decimal(valor.strip())
+
+    if numero is None or not numero.is_finite():
+        errores.agregar(campo, "Debe ser un número.")
+        return None
+    if minimo is not None and numero < minimo:
+        errores.agregar(campo, f"Debe ser mayor o igual a {minimo}.")
+        return None
+    if decimales is not None and -numero.as_tuple().exponent > decimales:
+        errores.agregar(campo, f"Máximo {decimales} decimales.")
+        return None
+    return numero
+
+
+def lista_separada_por_comas(errores, datos, campo, max_elementos, max_largo):
+    """Lista "a, b,,c" -> ["a", "b", "c"]. None si el campo no viene."""
+    valor = datos.get(campo)
+    if valor is None:
+        return None
+    if not isinstance(valor, str):
+        errores.agregar(campo, "Debe ser una lista separada por comas.")
+        return None
+    elementos = [parte.strip() for parte in valor.split(",") if parte.strip()]
+    if len(elementos) > max_elementos:
+        errores.agregar(campo, f"Máximo {max_elementos} elementos.")
+        return None
+    if any(len(e) > max_largo for e in elementos):
+        errores.agregar(campo, f"Cada elemento admite máximo {max_largo} caracteres.")
+        return None
+    return elementos
