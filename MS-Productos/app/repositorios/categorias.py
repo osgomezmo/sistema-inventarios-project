@@ -112,3 +112,45 @@ def actualizar(cursor, id_categoria, nombre, descripcion, id_padre):
         " WHERE id_categoria = %s",
         (nombre, descripcion, id_padre, id_categoria),
     )
+
+
+def _marcadores(ids):
+    """Un %s por id, para usar en IN (...); los valores van como parámetros."""
+    return ", ".join(["%s"] * len(ids))
+
+
+def bloquear_subcategorias(cursor, id_padre):
+    """Subcategorías de `id_padre`, bloqueadas hasta el fin de la transacción."""
+    cursor.execute(
+        f"SELECT {COLUMNAS} FROM categorias WHERE id_categoria_padre = %s"
+        f" {ORDEN} FOR UPDATE",
+        (id_padre,),
+    )
+    return cursor.fetchall()
+
+
+def contar_productos_activos(cursor, ids_categoria):
+    """Productos ACTIVOS de cualquiera de las categorías indicadas.
+
+    Es una lectura con bloqueo (FOR SHARE): ve lo último confirmado y no la
+    instantánea de la transacción.
+    """
+    ids = list(ids_categoria)
+    if not ids:
+        return 0
+    cursor.execute(
+        "SELECT COUNT(*) AS total FROM productos"
+        f" WHERE estado = %s AND id_categoria IN ({_marcadores(ids)}) FOR SHARE",
+        ["ACTIVO", *ids],
+    )
+    return cursor.fetchone()["total"]
+
+
+def actualizar_estado(cursor, ids_categoria, estado):
+    ids = list(ids_categoria)
+    if not ids:
+        return
+    cursor.execute(
+        f"UPDATE categorias SET estado = %s WHERE id_categoria IN ({_marcadores(ids)})",
+        [estado, *ids],
+    )

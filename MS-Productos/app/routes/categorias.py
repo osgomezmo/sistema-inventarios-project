@@ -146,3 +146,69 @@ def editar_categoria(id_categoria):
         categoria = con_subcategorias(cursor, repo.obtener(cursor, id_categoria))
 
     return jsonify(categoria)
+
+
+@categorias_bp.post("/categorias/<int:id_categoria>/inactivar")
+def inactivar_categoria(id_categoria):
+    # El cuerpo, si viene, se ignora.
+    with transaccion() as cursor:
+        categoria = repo.obtener_bloqueando(cursor, id_categoria)
+        if categoria is None:
+            raise no_existe()
+        # Idempotente: si ya está inactiva, se responde sin cambios.
+        if categoria["estado"] == "INACTIVO":
+            return jsonify(con_subcategorias(cursor, categoria))
+
+        # Una raíz arrastra a todas sus subcategorías; una subcategoría, solo a sí misma.
+        ids = [id_categoria]
+        if categoria["id_categoria_padre"] is None:
+            ids += [s["id_categoria"] for s in repo.bloquear_subcategorias(cursor, id_categoria)]
+
+        if repo.contar_productos_activos(cursor, ids) > 0:
+            raise ApiError(
+                "CATEGORIA_CON_PRODUCTOS",
+                "No se puede inactivar: la categoría o alguna de sus subcategorías"
+                " tiene productos activos.",
+                409,
+            )
+
+        repo.actualizar_estado(cursor, ids, "INACTIVO")
+        return jsonify(con_subcategorias(cursor, repo.obtener(cursor, id_categoria)))
+
+
+@categorias_bp.post("/categorias/<int:id_categoria>/activar")
+def activar_categoria(id_categoria):
+    # El cuerpo, si viene, se ignora.
+    with transaccion() as cursor:
+        categoria = repo.obtener(cursor, id_categoria)
+        if categoria is None:
+            raise no_existe()
+
+        # Se bloquea primero la raíz y luego la subcategoría, el mismo orden que
+        # usa inactivar, para no cruzar bloqueos entre las dos operaciones.
+        id_padre = categoria["id_categoria_padre"]
+        padre = repo.obtener_bloqueando(cursor, id_padre) if id_padre is not None else None
+        categoria = repo.obtener_bloqueando(cursor, id_categoria)
+        if categoria["id_categoria_padre"] != id_padre:
+            raise ApiError(
+                "CONFLICTO",
+                "La categoría cambió de nivel mientras se activaba; intenta de nuevo.",
+                409,
+            )
+
+        # Idempotente: si ya está activa, se responde sin cambios.
+        if categoria["estado"] == "ACTIVO":
+            return jsonify(con_subcategorias(cursor, categoria))
+
+        # Una subcategoría necesita su raíz activa. Activar una raíz no reactiva sus hijas.
+        if padre is not None and padre["estado"] != "ACTIVO":
+            raise ApiError(
+                "CONFLICTO",
+                "No se puede activar la subcategoría porque su categoría raíz está"
+                " inactiva. Activa primero la raíz.",
+                409,
+            )
+
+        repo.actualizar_estado(cursor, [id_categoria], "ACTIVO")
+        categoria["estado"] = "ACTIVO"
+        return jsonify(con_subcategorias(cursor, categoria))
