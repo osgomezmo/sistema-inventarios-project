@@ -11,6 +11,7 @@ import { useBodega } from '../contexto/Bodega'
 import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, Vacio, erroresCampo } from '../componentes/ui'
 import { cantidad, fechaHora, numeroMovimiento, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
+import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 
 export function Devoluciones() {
   const usuario = useUsuario()
@@ -113,15 +114,23 @@ export function NuevaDevolucionCliente() {
   const [motivo, setMotivo] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const campos = erroresCampo(error)
   const p = productoPorSku.get(sku)
 
-  async function enviar(e: FormEvent) {
+  const v = useValidacion(validar({
+    factura_pos: [reglas.requerido(factura, 'Indica la factura del POS.'), reglas.facturaPos(factura)],
+    sku: [reglas.requerido(sku, 'Elige el producto que devuelve el cliente.')],
+    cantidad: [reglas.numero(cant, { requerido: true, mensajeVacio: 'Escribe la cantidad devuelta.', decimales: p ? decimalesPorUnidad(p.unidad_medida) : 3, mayorQueCero: true, max: 10000, mensajeMax: 'Revisa la cantidad: parece demasiado alta para una devolución.' })],
+    motivo: [reglas.requerido(motivo, 'Indica el motivo de la devolución.'), reglas.largo(motivo, 5, 200)],
+  }))
+  const campos = { ...erroresCampo(error), ...v.visibles }
+
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
     try {
-      const m = await devolucionesClienteApi.crear({ sku, id_bodega: bodega, cantidad: Number(cant.replace(',', '.')), factura_pos: factura, motivo }, usuario.id)
+      const m = await devolucionesClienteApi.crear({ sku, id_bodega: bodega, cantidad: aNumero(cant) ?? 0, factura_pos: factura.trim().toUpperCase(), motivo: motivo.trim() }, usuario.id)
       avisar(`Devolución registrada como ${numeroMovimiento(m.id_movimiento)}: reingresan ${cantidad(m.cantidad, p!.unidad_medida)}`)
       navegar('/devoluciones?de=clientes')
     } catch (err) {
@@ -136,11 +145,11 @@ export function NuevaDevolucionCliente() {
   return (
     <>
       <Encabezado migas={<><Link to="/devoluciones">Devoluciones</Link><span aria-hidden>/</span><span>De cliente</span></>} titulo="Devolución de cliente" descripcion="El producto reingresa al saldo de la bodega con referencia a la factura del POS." />
-      <form className="panel formulario" onSubmit={enviar} noValidate>
-        {error && !Object.keys(campos).length && <ErrorCaja error={error} />}
+      <form className="panel formulario" onSubmit={enviar} onBlur={v.alSalir} noValidate>
+        {error && !Object.keys(erroresCampo(error)).length && <ErrorCaja error={error} />}
         <div className="fila-campos">
           <Campo id="d-factura" etiqueta="Factura del POS" error={campos.factura_pos}>
-            <input id="d-factura" value={factura} onChange={(e) => setFactura(e.target.value)} placeholder="FV-POS-0019802" />
+            <input id="d-factura" name="factura_pos" maxLength={30} value={factura} onChange={(e) => setFactura(e.target.value)} placeholder="FV-POS-0019802" />
           </Campo>
           <Campo id="d-bodega" etiqueta="Bodega que recibe">
             <select id="d-bodega" value={bodega} onChange={(e) => setBodega(Number(e.target.value))}>
@@ -150,17 +159,17 @@ export function NuevaDevolucionCliente() {
         </div>
         <div className="fila-campos">
           <Campo id="d-sku" etiqueta="Producto" error={campos.sku}>
-            <select id="d-sku" value={sku} onChange={(e) => setSku(e.target.value)}>
+            <select id="d-sku" name="sku" value={sku} onChange={(e) => setSku(e.target.value)}>
               <option value="">Elige un producto</option>
               {productos.filter((x) => x.estado === 'ACTIVO').map((x) => <option key={x.sku} value={x.sku}>{x.sku} · {x.nombre}</option>)}
             </select>
           </Campo>
           <Campo id="d-cant" etiqueta={`Cantidad${p ? ` (${unidad(p.unidad_medida)})` : ''}`} error={campos.cantidad}>
-            <input id="d-cant" inputMode="decimal" value={cant} onChange={(e) => setCant(e.target.value)} />
+            <input id="d-cant" name="cantidad" inputMode="decimal" maxLength={14} value={cant} onChange={(e) => setCant(e.target.value)} />
           </Campo>
         </div>
-        <Campo id="d-motivo" etiqueta="Motivo" error={campos.motivo}>
-          <textarea id="d-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Producto defectuoso" />
+        <Campo id="d-motivo" etiqueta="Motivo" error={campos.motivo} ayuda="Entre 5 y 200 caracteres.">
+          <textarea id="d-motivo" name="motivo" maxLength={200} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Producto defectuoso" />
         </Campo>
         <div className="acciones-separadas">
           <BotonEnvio enviando={enviando}>Registrar devolución</BotonEnvio>

@@ -62,7 +62,7 @@ export function Stock() {
             <div className="filtros">
               <div className="campo ancho">
                 <label htmlFor="f-q">Buscar en esta bodega</label>
-                <input id="f-q" type="search" placeholder="SKU o nombre" value={q} onChange={(e) => setQ(e.target.value)} />
+                <input id="f-q" type="search" placeholder="SKU o nombre" maxLength={60} value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
               <div className="chips" role="group" aria-label="Filtro de estado" style={{ marginBottom: 0 }}>
                 <button type="button" className="chip" aria-pressed={!soloBajo && !seleccionado} onClick={() => { setSeleccionado(null); setParams({}) }}>Todos</button>

@@ -8,6 +8,7 @@ import { nombreRol } from '../auth/permisos'
 import { LogoEstiba } from '../componentes/Marca'
 import { BotonEnvio, Campo, ErrorCaja, erroresCampo } from '../componentes/ui'
 import { RackBodega } from '../tres/RackDiferido'
+import { reglas, useValidacion, validar } from '../lib/validacion'
 
 export function Ingreso() {
   const { sesion, iniciar } = useSesion()
@@ -18,13 +19,18 @@ export function Ingreso() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const saldosPortada = useMemo(() => saldosActuales().filter((s) => s.id_bodega === 1), [])
+  const v = useValidacion(validar({
+    email: [reglas.requerido(email, 'Escribe tu correo.'), reglas.email(email)],
+    password: [reglas.requerido(password, 'Escribe tu contraseña.')],
+  }))
 
   if (sesion) return <Navigate to="/" replace />
   const destino = (ubicacion.state as { desde?: string } | null)?.desde ?? '/'
-  const campos = erroresCampo(error)
+  const campos = { ...erroresCampo(error), ...v.visibles }
 
-  async function enviar(e: FormEvent) {
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     setError(null)
     try {
@@ -46,13 +52,13 @@ export function Ingreso() {
           <p className="ingreso-intro">Inventario por bodega, compras y devoluciones del supermercado.</p>
         </div>
 
-        <form className="formulario" onSubmit={enviar} noValidate>
-          {error && !Object.keys(campos).length && <ErrorCaja error={error} />}
+        <form className="formulario" onSubmit={enviar} onBlur={v.alSalir} noValidate>
+          {error && !Object.keys(erroresCampo(error)).length && <ErrorCaja error={error} />}
           <Campo id="email" etiqueta="Correo" error={campos.email}>
-            <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} aria-describedby={campos.email ? 'email-error' : undefined} />
+            <input id="email" name="email" type="email" autoComplete="username" maxLength={120} value={email} onChange={(e) => setEmail(e.target.value)} />
           </Campo>
           <Campo id="password" etiqueta="Contraseña" error={campos.password}>
-            <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input id="password" name="password" type="password" autoComplete="current-password" maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} />
           </Campo>
           <div className="acciones-separadas">
             <BotonEnvio enviando={enviando}>Ingresar</BotonEnvio>
@@ -84,9 +90,11 @@ export function Recuperar() {
   const [email, setEmail] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [listo, setListo] = useState(false)
+  const v = useValidacion(validar({ email: [reglas.requerido(email, 'Escribe tu correo.'), reglas.email(email)] }))
 
-  async function enviar(e: FormEvent) {
+  async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!v.comprobar(e.currentTarget)) return
     setEnviando(true)
     await auth.recuperar(email)
     setEnviando(false)
@@ -109,9 +117,9 @@ export function Recuperar() {
             </div>
           </div>
         ) : (
-          <form className="formulario" onSubmit={enviar}>
-            <Campo id="email-recuperar" etiqueta="Correo">
-              <input id="email-recuperar" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <form className="formulario" onSubmit={enviar} onBlur={v.alSalir} noValidate>
+            <Campo id="email-recuperar" etiqueta="Correo" error={v.visibles.email}>
+              <input id="email-recuperar" name="email" type="email" autoComplete="username" maxLength={120} value={email} onChange={(e) => setEmail(e.target.value)} />
             </Campo>
             <div className="acciones-separadas">
               <BotonEnvio enviando={enviando}>Enviar enlace</BotonEnvio>

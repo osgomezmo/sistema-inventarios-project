@@ -58,6 +58,20 @@
   font-size: var(--t-m);
 }
 .buscador input::placeholder { color: var(--tinta-3); }
+.buscador-aviso {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  padding: 6px 10px;
+  border: 2px solid var(--rojo);
+  border-radius: var(--r-2);
+  background: var(--placa);
+  color: var(--rojo);
+  font-size: var(--t-s);
+  font-weight: 600;
+  box-shadow: var(--sombra-2);
+  white-space: nowrap;
+}
 
 .barra-bodega {
   display: flex;

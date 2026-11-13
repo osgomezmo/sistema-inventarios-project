@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { AltaBodega, AltaCategoria, AltaProducto } from './Altas'
+import { aNumero, reglas } from '../lib/validacion'
 import { Boxes, Plus } from 'lucide-react'
 import { ApiError, bodegasApi, categoriasApi, productosApi, stockApi } from '../api/cliente'
 import { categoriaPorId, categoriaRaiz, productos as todosProductos } from '../api/mock/maestros'
@@ -8,7 +9,7 @@ import { useUsuario } from '../auth/Sesion'
 import { puedeEditar } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
 import { useBodega } from '../contexto/Bodega'
-import { Cargando, Encabezado, ErrorCaja, EtiquetaEstado, Paginacion, Vacio } from '../componentes/ui'
+import { Campo, Cargando, Encabezado, ErrorCaja, EtiquetaEstado, Paginacion, Vacio } from '../componentes/ui'
 import { cantidad, dinero, dineroCorto, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 
@@ -16,12 +17,19 @@ export function Productos() {
   const usuario = useUsuario()
   const avisar = useAvisos()
   const [params, setParams] = useSearchParams()
+  const textoMin = params.get('min') ?? ''
+  const textoMax = params.get('max') ?? ''
+  const errorMin = reglas.numero(textoMin, { decimales: 2, min: 0 }) || null
+  const errorMaxFormato = reglas.numero(textoMax, { decimales: 2, min: 0 }) || null
+  const min = errorMin || !textoMin ? undefined : aNumero(textoMin) ?? undefined
+  const max = errorMaxFormato || !textoMax ? undefined : aNumero(textoMax) ?? undefined
+  const errorMax = errorMaxFormato || (min !== undefined && max !== undefined && min > max ? 'Debe ser mayor o igual al precio desde.' : null)
   const f = {
-    q: params.get('q') ?? '',
+    q: (params.get('q') ?? '').slice(0, 60),
     id_categoria: Number(params.get('categoria')) || undefined,
     estado: (params.get('estado') as 'ACTIVO' | 'INACTIVO') || undefined,
-    precio_min: params.get('min') ? Number(params.get('min')) : undefined,
-    precio_max: params.get('max') ? Number(params.get('max')) : undefined,
+    precio_min: min,
+    precio_max: errorMax ? undefined : max,
     page: Number(params.get('page') ?? 1),
   }
   const c = useConsulta(() => productosApi.listar({ ...f, per_page: 15 }), [params.toString()])
@@ -49,7 +57,7 @@ export function Productos() {
       />
       {alta && <AltaProducto listo={(t) => { avisar(t); setAlta(false); c.recargar() }} cancelar={() => setAlta(false)} />}
       <div className="filtros">
-        <div className="campo ancho"><label htmlFor="pr-q">Buscar</label><input id="pr-q" type="search" placeholder="SKU o nombre" value={f.q} onChange={(e) => cambiar('q', e.target.value)} /></div>
+        <div className="campo ancho"><label htmlFor="pr-q">Buscar</label><input id="pr-q" type="search" placeholder="SKU o nombre" maxLength={60} value={f.q} onChange={(e) => cambiar('q', e.target.value)} /></div>
         <div className="campo">
           <label htmlFor="pr-cat">Categoría</label>
           <select id="pr-cat" value={f.id_categoria ?? ''} onChange={(e) => cambiar('categoria', e.target.value)}>
@@ -63,8 +71,12 @@ export function Productos() {
             <option value="">Todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option>
           </select>
         </div>
-        <div className="campo" style={{ width: 150 }}><label htmlFor="pr-min">Precio desde</label><input id="pr-min" inputMode="numeric" value={params.get('min') ?? ''} onChange={(e) => cambiar('min', e.target.value)} /></div>
-        <div className="campo" style={{ width: 150 }}><label htmlFor="pr-max">Precio hasta</label><input id="pr-max" inputMode="numeric" value={params.get('max') ?? ''} onChange={(e) => cambiar('max', e.target.value)} /></div>
+        <div style={{ width: 170 }}>
+          <Campo id="pr-min" etiqueta="Precio desde" error={errorMin ? [errorMin] : undefined}><input id="pr-min" inputMode="decimal" maxLength={12} value={textoMin} onChange={(e) => cambiar('min', e.target.value)} /></Campo>
+        </div>
+        <div style={{ width: 170 }}>
+          <Campo id="pr-max" etiqueta="Precio hasta" error={errorMax ? [errorMax] : undefined}><input id="pr-max" inputMode="decimal" maxLength={12} value={textoMax} onChange={(e) => cambiar('max', e.target.value)} /></Campo>
+        </div>
       </div>
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       <div className="tabla-envoltura" style={{ opacity: c.cargando && c.datos ? 0.6 : 1 }}>
@@ -135,7 +147,7 @@ export function Categorias() {
 
 export function Bodegas() {
   const usuario = useUsuario()
-  const { cambiar } = useBodega()
+  const { cambiar, refrescar } = useBodega()
   const navegar = useNavigate()
   const avisar = useAvisos()
   const [alta, setAlta] = useState(false)
@@ -147,7 +159,7 @@ export function Bodegas() {
         descripcion="Cada bodega tiene su propio rack; todas se dibujan a la misma escala."
         acciones={puedeEditar(usuario.rol, 'bodegas') && <button type="button" className="btn btn-pri" aria-expanded={alta} onClick={() => setAlta(!alta)}><Plus size={18} aria-hidden />Nueva bodega</button>}
       />
-      {alta && <AltaBodega listo={(t) => { avisar(t); setAlta(false); c.recargar() }} cancelar={() => setAlta(false)} />}
+      {alta && <AltaBodega listo={(t) => { avisar(t); setAlta(false); refrescar(); c.recargar() }} cancelar={() => setAlta(false)} />}
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       {!c.datos && !c.error && <div className="panel"><Cargando /></div>}
       {c.datos && (

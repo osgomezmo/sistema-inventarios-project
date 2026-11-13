@@ -13,7 +13,7 @@ import {
   proveedorPorId, proveedores, roles, usuarios,
 } from './mock/maestros'
 import {
-  AHORA, aplicarMovimiento, esEntrada, movimientos, notificaciones, ordenes, saldoAntesDe, saldosActuales, traslados,
+  AHORA, ahoraSimulado, aplicarMovimiento, esEntrada, movimientos, notificaciones, ordenes, saldoAntesDe, saldosActuales, traslados,
 } from './mock/simulacion'
 
 export class ApiError extends Error {
@@ -189,7 +189,7 @@ export const movimientosApi = {
     const p = productoPorSku.get(m.sku)
     if (!p) return fallar(404, 'PRODUCTO_INEXISTENTE', `No existe un producto con SKU ${m.sku}.`)
     if (!esEntrada(m.tipo)) { const e = validarSalida(m.sku, m.id_bodega, m.cantidad); if (e) return e }
-    const mov = aplicarMovimiento({ fecha: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), sku: m.sku, id_bodega: m.id_bodega, tipo: m.tipo, cantidad: m.cantidad, costo: m.costo_unitario, motivo: m.motivo || null, documento: m.documento_referencia || null, usuario: id_usuario })!
+    const mov = aplicarMovimiento({ fecha: ahoraSimulado(), sku: m.sku, id_bodega: m.id_bodega, tipo: m.tipo, cantidad: m.cantidad, costo: m.costo_unitario, motivo: m.motivo || null, documento: m.documento_referencia || null, usuario: id_usuario })!
     return esperar(mov, 450)
   },
 }
@@ -218,7 +218,7 @@ export const trasladosApi = {
     if (Object.keys(detalles).length) return fallar(422, 'VALIDACION', 'Revisa los campos marcados.', detalles)
     const e = validarSalida(t.sku, t.id_bodega_origen, t.cantidad)
     if (e) return e
-    const fecha = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+    const fecha = ahoraSimulado()
     const id = Math.max(...traslados.map((x) => x.id_traslado)) + 1
     const salida = aplicarMovimiento({ fecha, sku: t.sku, id_bodega: t.id_bodega_origen, tipo: 'TRASLADO_SALIDA', cantidad: t.cantidad, motivo: t.motivo ?? null, documento: `TR-${id}`, usuario: id_usuario })!
     const entrada = aplicarMovimiento({ fecha, sku: t.sku, id_bodega: t.id_bodega_destino, tipo: 'TRASLADO_ENTRADA', cantidad: salida.cantidad, costo: salida.costo_unitario, motivo: t.motivo ?? null, documento: `TR-${id}`, usuario: id_usuario })!
@@ -240,7 +240,7 @@ export const devolucionesClienteApi = {
     if (!d.motivo.trim()) detalles.motivo = ['Indica el motivo de la devolución.']
     if (!(d.cantidad > 0)) detalles.cantidad = ['La cantidad debe ser mayor que cero.']
     if (Object.keys(detalles).length) return fallar(422, 'VALIDACION', 'Revisa los campos marcados.', detalles)
-    const mov = aplicarMovimiento({ fecha: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), sku: d.sku, id_bodega: d.id_bodega, tipo: 'DEVOLUCION_CLIENTE', cantidad: d.cantidad, motivo: d.motivo, documento: d.factura_pos, usuario: id_usuario })!
+    const mov = aplicarMovimiento({ fecha: ahoraSimulado(), sku: d.sku, id_bodega: d.id_bodega, tipo: 'DEVOLUCION_CLIENTE', cantidad: d.cantidad, motivo: d.motivo, documento: d.factura_pos, usuario: id_usuario })!
     return esperar(mov, 450)
   },
 }
@@ -287,7 +287,7 @@ export const ordenesApi = {
     if (!o) return fallar(404, 'NO_EXISTE', 'La orden de compra no existe.')
     if (o.estado !== 'BORRADOR') return fallar(409, 'TRANSICION_INVALIDA', `Solo se aprueban órdenes en borrador; esta está ${o.estado}.`)
     o.estado = 'APROBADA'
-    o.fecha_actualizacion = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+    o.fecha_actualizacion = ahoraSimulado()
     return esperar(o, 400)
   },
   /** POST /api/ordenes-compra/{id}/anular */
@@ -311,7 +311,7 @@ export const ordenesApi = {
       const d = o.items.find((x) => x.id_detalle === i.id_detalle)!
       if (i.cantidad > d.cantidad - d.cantidad_recibida) return fallar(409, 'CANTIDAD_MAYOR_QUE_PENDIENTE', `${productoPorSku.get(d.sku)!.nombre}: quedan ${d.cantidad - d.cantidad_recibida} por recibir.`)
     }
-    const fecha = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+    const fecha = ahoraSimulado()
     for (const i of validos) {
       const d = o.items.find((x) => x.id_detalle === i.id_detalle)!
       d.cantidad_recibida += i.cantidad
@@ -329,7 +329,7 @@ export const ordenesApi = {
     const items = o.items.filter((i) => i.sku && i.cantidad > 0)
     if (!items.length) return fallar(422, 'SIN_ITEMS', 'La orden necesita al menos un producto con cantidad.', { items: ['Agrega al menos un producto.'] })
     const id = Math.max(...ordenes.map((x) => x.id_orden)) + 1
-    const fecha = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+    const fecha = ahoraSimulado()
     const nueva: OrdenCompra = {
       id_orden: id, numero: `OC-2026-${String(id).padStart(4, '0')}`, id_proveedor: o.id_proveedor, id_bodega_destino: o.id_bodega_destino,
       estado: 'BORRADOR', fecha_creacion: fecha, fecha_actualizacion: fecha, id_usuario, motivo_anulacion: null,
@@ -351,7 +351,7 @@ export const ordenesApi = {
       const d = o.items.find((x) => x.id_detalle === i.id_detalle)!
       if (i.cantidad > d.cantidad_recibida - d.cantidad_devuelta) return fallar(409, 'CANTIDAD_MAYOR_QUE_RECIBIDA', `${productoPorSku.get(d.sku)!.nombre}: solo se pueden devolver ${d.cantidad_recibida - d.cantidad_devuelta}.`)
     }
-    const fecha = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+    const fecha = ahoraSimulado()
     for (const i of validos) {
       const d = o.items.find((x) => x.id_detalle === i.id_detalle)!
       d.cantidad_devuelta += i.cantidad

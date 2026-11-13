@@ -6,7 +6,8 @@ import { reportesApi } from '../api/cliente'
 import { bodegaPorId, productoPorSku } from '../api/mock/maestros'
 import { useBodega } from '../contexto/Bodega'
 import { BarrasH } from '../componentes/Graficas'
-import { Cargando, Encabezado, ErrorCaja, EtiquetaSaldo, Vacio } from '../componentes/ui'
+import { Campo, Cargando, Encabezado, ErrorCaja, EtiquetaSaldo, Vacio } from '../componentes/ui'
+import { reglas } from '../lib/validacion'
 import { cantidad, dinero, dineroCorto, fechaHora } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 
@@ -99,13 +100,16 @@ function Rotacion() {
   const [desde, setDesde] = useState('2026-10-01')
   const [hasta, setHasta] = useState('2026-10-29')
   const [bodega, setBodega] = useState(0)
-  const c = useConsulta(() => reportesApi.rotacion({ desde, hasta, id_bodega: bodega || undefined, top: 8 }), [desde, hasta, bodega])
+  const errorDesde = reglas.requerido(desde, 'Elige la fecha inicial.') || null
+  const errorHasta = reglas.requerido(hasta, 'Elige la fecha final.') || reglas.rangoFechas(desde, hasta) || null
+  const rangoValido = !errorDesde && !errorHasta
+  const c = useConsulta(() => (rangoValido ? reportesApi.rotacion({ desde, hasta, id_bodega: bodega || undefined, top: 8 }) : Promise.resolve(null)), [desde, hasta, bodega])
   const veces = (v: number) => `${v.toLocaleString('es-CO', { maximumFractionDigits: 2 })} veces`
   return (
     <section role="tabpanel" className="pila">
       <div className="filtros" style={{ marginBottom: 0 }}>
-        <div className="campo"><label htmlFor="r-desde">Desde</label><input id="r-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></div>
-        <div className="campo"><label htmlFor="r-hasta">Hasta</label><input id="r-hasta" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></div>
+        <Campo id="r-desde" etiqueta="Desde" error={errorDesde ? [errorDesde] : undefined}><input id="r-desde" type="date" max={hasta || undefined} value={desde} onChange={(e) => setDesde(e.target.value)} /></Campo>
+        <Campo id="r-hasta" etiqueta="Hasta" error={errorHasta ? [errorHasta] : undefined}><input id="r-hasta" type="date" min={desde || undefined} value={hasta} onChange={(e) => setHasta(e.target.value)} /></Campo>
         <FiltroBodega valor={bodega} cambiar={setBodega} />
         <button type="button" className="btn" disabled={!c.datos} onClick={() => descargarCsv('rotacion.csv', [['SKU', 'Producto', 'Unidades de salida', 'Rotación'], ...[...(c.datos?.mayor_rotacion ?? []), ...(c.datos?.menor_rotacion ?? [])].map((r) => [r.sku, r.nombre, String(r.unidades_salida), String(r.rotacion)])])}>
           <Download size={18} aria-hidden />Exportar CSV
@@ -113,7 +117,8 @@ function Rotacion() {
       </div>
       <p style={{ color: 'var(--tinta-2)' }}>Rotación = unidades que salieron en el periodo divididas por el saldo promedio al cierre de cada día.</p>
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
-      {!c.datos && !c.error && <div className="panel"><Cargando /></div>}
+      {!rangoValido && <div className="panel"><Vacio titulo="Corrige el rango de fechas">La rotación necesita una fecha inicial y una final, y la final no puede ser anterior.</Vacio></div>}
+      {rangoValido && !c.datos && !c.error && <div className="panel"><Cargando /></div>}
       {c.datos && (
         <div className="tablero-inferior">
           <div className="panel"><h2>Mayor rotación</h2><BarrasH etiqueta="Productos de mayor rotación" filas={c.datos.mayor_rotacion.map((r) => ({ clave: r.sku, nombre: r.nombre, valor: r.rotacion }))} formato={veces} /></div>

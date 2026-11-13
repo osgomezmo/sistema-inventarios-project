@@ -27,7 +27,7 @@ export function Proveedores() {
       />
       {alta && <AltaProveedor listo={(t) => { avisar(t); setAlta(false); c.recargar() }} cancelar={() => setAlta(false)} />}
       <div className="filtros">
-        <div className="campo ancho"><label htmlFor="p-q">Buscar</label><input id="p-q" type="search" placeholder="NIT o razón social" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <div className="campo ancho"><label htmlFor="p-q">Buscar</label><input id="p-q" type="search" placeholder="NIT o razón social" maxLength={60} value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <div className="campo">
           <label htmlFor="p-estado">Estado</label>
           <select id="p-estado" value={estado} onChange={(e) => setEstado(e.target.value as typeof estado)}>
