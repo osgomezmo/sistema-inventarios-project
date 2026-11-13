@@ -7,11 +7,14 @@ from app.errors import ApiError
 from app.paginacion import leer_paginacion, respuesta_paginada
 from app.validacion import (
     Errores,
+    decimal_obligatorio,
     decimal_opcional,
+    entero_obligatorio,
     entero_opcional,
     leer_json,
     lista_separada_por_comas,
     opcion,
+    sku,
     texto_obligatorio,
     texto_opcional,
 )
@@ -266,3 +269,82 @@ def test_lista_separada_por_comas(valor, esperado, hay_error):
     resultado = lista_separada_por_comas(errores, {"skus": valor}, "skus", 3, 5)
     assert resultado == esperado
     assert bool(errores) is hay_error
+
+
+@pytest.mark.parametrize(
+    "valor, esperado, hay_error",
+    [
+        ("999.99", Decimal("999.99"), False),
+        (999.99, Decimal("999.99"), False),
+        ("1000", None, True),
+        (1000.001, None, True),
+    ],
+)
+def test_decimal_opcional_con_maximo(valor, esperado, hay_error):
+    errores = Errores()
+    resultado = decimal_opcional(
+        errores, {"precio": valor}, "precio", minimo=0, decimales=2, maximo=Decimal("999.99"))
+    assert resultado == esperado
+    assert bool(errores) is hay_error
+
+
+@pytest.mark.parametrize(
+    "datos, esperado, mensaje",
+    [
+        ({}, None, "Es obligatorio."),
+        ({"n": None}, None, "Es obligatorio."),
+        ({"n": ""}, None, "Es obligatorio."),
+        ({"n": "  "}, None, "Es obligatorio."),
+        ({"n": "12.345"}, Decimal("12.345"), None),
+        ({"n": 0}, Decimal("0"), None),
+        ({"n": "12.3456"}, None, "Máximo 3 decimales."),
+        ({"n": True}, None, "Debe ser un número."),
+    ],
+)
+def test_decimal_obligatorio(datos, esperado, mensaje):
+    errores = Errores()
+    assert decimal_obligatorio(errores, datos, "n", minimo=0, decimales=3) == esperado
+    assert errores.detalles == ({"n": [mensaje]} if mensaje else {})
+
+
+@pytest.mark.parametrize(
+    "datos, esperado, mensaje",
+    [
+        ({}, None, "Es obligatorio."),
+        ({"n": None}, None, "Es obligatorio."),
+        ({"n": ""}, None, "Es obligatorio."),
+        ({"n": 7}, 7, None),
+        ({"n": "7"}, 7, None),
+        ({"n": 0}, None, "Debe ser mayor o igual a 1."),
+        ({"n": 7.5}, None, "Debe ser un número entero."),
+        ({"n": False}, None, "Debe ser un número entero."),
+    ],
+)
+def test_entero_obligatorio(datos, esperado, mensaje):
+    errores = Errores()
+    assert entero_obligatorio(errores, datos, "n", minimo=1) == esperado
+    assert errores.detalles == ({"n": [mensaje]} if mensaje else {})
+
+
+@pytest.mark.parametrize(
+    "valor, esperado",
+    [
+        ("lac-0001", "LAC-0001"),
+        ("  abc_1.2 ", "ABC_1.2"),
+        ("X" * 10, "X" * 10),
+    ],
+)
+def test_sku_valido(valor, esperado):
+    errores = Errores()
+    assert sku(errores, {"sku": valor}, "sku", 10) == esperado
+    assert not errores
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [None, "", "   ", "X" * 11, "AB CD", "AB/CD", "ÑANDU", "AB#1", 123, ["A"]],
+)
+def test_sku_invalido(valor):
+    errores = Errores()
+    assert sku(errores, {"sku": valor}, "sku", 10) is None
+    assert list(errores.detalles) == ["sku"]

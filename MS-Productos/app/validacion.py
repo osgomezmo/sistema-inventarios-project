@@ -15,6 +15,7 @@ from app.errors import ApiError
 MENSAJE_VALIDACION = "Revisa los campos enviados."
 PATRON_ENTERO = re.compile(r"-?\d+")
 PATRON_DECIMAL = re.compile(r"-?\d+(\.\d+)?")
+PATRON_SKU = re.compile(r"[A-Z0-9._-]+")
 
 
 class Errores:
@@ -116,7 +117,7 @@ def opcion(errores, datos, campo, opciones, obligatorio=False):
     return valor
 
 
-def decimal_opcional(errores, datos, campo, minimo=None, decimales=None):
+def decimal_opcional(errores, datos, campo, minimo=None, decimales=None, maximo=None):
     """Número decimal de JSON o de la query string, devuelto como Decimal.
 
     Acepta 12, 12.5 y "12.50"; rechaza true, "abc", "nan", "inf" y la notación
@@ -142,6 +143,9 @@ def decimal_opcional(errores, datos, campo, minimo=None, decimales=None):
     if minimo is not None and numero < minimo:
         errores.agregar(campo, f"Debe ser mayor o igual a {minimo}.")
         return None
+    if maximo is not None and numero > maximo:
+        errores.agregar(campo, f"Debe ser menor o igual a {maximo}.")
+        return None
     if decimales is not None and -numero.as_tuple().exponent > decimales:
         errores.agregar(campo, f"Máximo {decimales} decimales.")
         return None
@@ -164,3 +168,37 @@ def lista_separada_por_comas(errores, datos, campo, max_elementos, max_largo):
         errores.agregar(campo, f"Cada elemento admite máximo {max_largo} caracteres.")
         return None
     return elementos
+
+
+def _vacio(valor):
+    return valor is None or (isinstance(valor, str) and not valor.strip())
+
+
+def entero_obligatorio(errores, datos, campo, minimo=None, maximo=None):
+    if _vacio(datos.get(campo)):
+        errores.agregar(campo, "Es obligatorio.")
+        return None
+    return entero_opcional(errores, datos, campo, minimo, maximo)
+
+
+def decimal_obligatorio(errores, datos, campo, minimo=None, decimales=None, maximo=None):
+    if _vacio(datos.get(campo)):
+        errores.agregar(campo, "Es obligatorio.")
+        return None
+    return decimal_opcional(errores, datos, campo, minimo, decimales, maximo)
+
+
+def sku(errores, datos, campo, maximo):
+    """SKU obligatorio: se recorta y se pasa a mayúsculas.
+
+    Solo admite letras, dígitos, guion, guion bajo y punto, sin espacios.
+    """
+    valor = texto_obligatorio(errores, datos, campo, maximo)
+    if valor is None:
+        return None
+    valor = valor.upper()
+    if not PATRON_SKU.fullmatch(valor):
+        errores.agregar(
+            campo, "Solo admite letras, dígitos, guion, guion bajo y punto, sin espacios.")
+        return None
+    return valor
