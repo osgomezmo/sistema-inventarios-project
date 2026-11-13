@@ -154,3 +154,16 @@ def actualizar_estado(cursor, ids_categoria, estado):
         f"UPDATE categorias SET estado = %s WHERE id_categoria IN ({_marcadores(ids)})",
         [estado, *ids],
     )
+
+
+def obtener_compartido(cursor, id_categoria):
+    """Lee la categoría con bloqueo compartido (FOR SHARE).
+
+    Otras lecturas compartidas pueden seguir, pero nadie puede modificarla (por
+    ejemplo, inactivarla) hasta que termine la transacción.
+    """
+    cursor.execute(
+        f"SELECT {COLUMNAS} FROM categorias WHERE id_categoria = %s FOR SHARE",
+        (id_categoria,),
+    )
+    return cursor.fetchone()

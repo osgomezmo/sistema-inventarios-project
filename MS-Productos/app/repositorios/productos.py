@@ -72,3 +72,17 @@ def obtener_por_sku(cursor, sku):
     """Datos que necesita ms-inventario. La comparación no distingue mayúsculas."""
     cursor.execute(f"SELECT {COLUMNAS_SKU} FROM productos WHERE sku = %s", (sku,))
     return cursor.fetchone()
+
+
+def insertar(cursor, sku, nombre, descripcion, marca, id_categoria, unidad_medida,
+             precio_venta, stock_minimo):
+    """Inserta un producto ACTIVO y devuelve su id. Un SKU repetido lanza
+    IntegrityError (errno 1062) por el índice único."""
+    cursor.execute(
+        "INSERT INTO productos (sku, nombre, descripcion, marca, id_categoria,"
+        " unidad_medida, precio_venta, stock_minimo)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (sku, nombre, descripcion, marca, id_categoria, unidad_medida,
+         precio_venta, stock_minimo),
+    )
+    return cursor.lastrowid
