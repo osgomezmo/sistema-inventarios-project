@@ -86,3 +86,24 @@ def insertar(cursor, sku, nombre, descripcion, marca, id_categoria, unidad_medid
          precio_venta, stock_minimo),
     )
     return cursor.lastrowid
+
+
+def obtener_bloqueando(cursor, id_producto):
+    """Como `obtener`, pero bloquea la fila hasta el fin de la transacción."""
+    cursor.execute(
+        f"SELECT {COLUMNAS} FROM productos WHERE id_producto = %s FOR UPDATE",
+        (id_producto,),
+    )
+    return cursor.fetchone()
+
+
+def actualizar(cursor, id_producto, nombre, descripcion, marca, id_categoria,
+               unidad_medida, precio_venta, stock_minimo):
+    """Reemplaza los datos editables. El SKU y el estado no se tocan."""
+    cursor.execute(
+        "UPDATE productos SET nombre = %s, descripcion = %s, marca = %s,"
+        " id_categoria = %s, unidad_medida = %s, precio_venta = %s, stock_minimo = %s"
+        " WHERE id_producto = %s",
+        (nombre, descripcion, marca, id_categoria, unidad_medida, precio_venta,
+         stock_minimo, id_producto),
+    )

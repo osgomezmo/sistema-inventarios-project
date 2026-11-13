@@ -73,7 +73,11 @@ def leer_cuerpo_producto(con_sku):
 def validar_categoria(cursor, id_categoria):
     """La categoría debe existir y estar ACTIVA. Se lee con FOR SHARE para que
     no la inactiven mientras se guarda el producto."""
-    categoria = repo_categorias.obtener_compartido(cursor, id_categoria)
+    verificar_categoria(repo_categorias.obtener_compartido(cursor, id_categoria))
+
+
+def verificar_categoria(categoria):
+    """422 si la categoría (ya leída) no existe o no está ACTIVA."""
     if categoria is None:
         mensaje = "La categoría no existe."
     elif categoria["estado"] != "ACTIVO":
@@ -157,3 +161,22 @@ def crear_producto():
         producto = repo.obtener(cursor, id_producto)
 
     return jsonify(producto), 201
+
+
+@productos_bp.put("/productos/<int:id_producto>")
+def editar_producto(id_producto):
+    # D32: reemplazo completo; el SKU y el estado del cuerpo se ignoran.
+    campos = leer_cuerpo_producto(con_sku=False)
+
+    with transaccion() as cursor:
+        # Primero la categoría y luego el producto: el mismo orden de bloqueo que
+        # usa inactivar una categoría, para no cruzar bloqueos.
+        categoria = repo_categorias.obtener_compartido(cursor, campos["id_categoria"])
+        if repo.obtener_bloqueando(cursor, id_producto) is None:
+            raise no_existe()
+        verificar_categoria(categoria)
+
+        repo.actualizar(cursor, id_producto, **campos)
+        producto = repo.obtener(cursor, id_producto)
+
+    return jsonify(producto)
