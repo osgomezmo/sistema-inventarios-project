@@ -56,3 +56,59 @@ def subcategorias_por_padre(cursor, ids_padre, estado=None):
 def obtener(cursor, id_categoria):
     cursor.execute(f"SELECT {COLUMNAS} FROM categorias WHERE id_categoria = %s", (id_categoria,))
     return cursor.fetchone()
+
+
+def obtener_bloqueando(cursor, id_categoria):
+    """Como `obtener`, pero bloquea la fila hasta el fin de la transacción."""
+    cursor.execute(
+        f"SELECT {COLUMNAS} FROM categorias WHERE id_categoria = %s FOR UPDATE",
+        (id_categoria,),
+    )
+    return cursor.fetchone()
+
+
+def nombre_repetido(cursor, nombre, id_padre, excluir_id=None):
+    """True si ya hay otra categoría con ese nombre en el mismo nivel.
+
+    La comparación usa la intercalación de la columna (utf8mb4_0900_ai_ci), así
+    que no distingue mayúsculas ni tildes. FOR UPDATE bloquea también el rango
+    revisado, para que otra transacción no cree el mismo nombre a la vez.
+    """
+    condiciones, parametros = ["nombre = %s"], [nombre]
+    if id_padre is None:
+        condiciones.append("id_categoria_padre IS NULL")
+    else:
+        condiciones.append("id_categoria_padre = %s")
+        parametros.append(id_padre)
+    if excluir_id is not None:
+        condiciones.append("id_categoria <> %s")
+        parametros.append(excluir_id)
+
+    donde = " AND ".join(condiciones)
+    cursor.execute(f"SELECT id_categoria FROM categorias WHERE {donde} LIMIT 1 FOR UPDATE", parametros)
+    return cursor.fetchone() is not None
+
+
+def contar_subcategorias(cursor, id_categoria):
+    cursor.execute(
+        "SELECT COUNT(*) AS total FROM categorias WHERE id_categoria_padre = %s",
+        (id_categoria,),
+    )
+    return cursor.fetchone()["total"]
+
+
+def insertar(cursor, nombre, descripcion, id_padre):
+    cursor.execute(
+        "INSERT INTO categorias (nombre, descripcion, id_categoria_padre) VALUES (%s, %s, %s)",
+        (nombre, descripcion, id_padre),
+    )
+    return cursor.lastrowid
+
+
+def actualizar(cursor, id_categoria, nombre, descripcion, id_padre):
+    """Reemplaza nombre, descripción y padre. El estado no se toca."""
+    cursor.execute(
+        "UPDATE categorias SET nombre = %s, descripcion = %s, id_categoria_padre = %s"
+        " WHERE id_categoria = %s",
+        (nombre, descripcion, id_padre, id_categoria),
+    )

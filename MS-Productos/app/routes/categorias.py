@@ -4,11 +4,70 @@ from app.db import transaccion
 from app.errors import ApiError
 from app.paginacion import leer_paginacion, respuesta_paginada
 from app.repositorios import categorias as repo
-from app.validacion import Errores, entero_opcional, opcion
+from app.validacion import (
+    Errores,
+    entero_opcional,
+    leer_json,
+    opcion,
+    texto_obligatorio,
+    texto_opcional,
+)
 
 categorias_bp = Blueprint("categorias", __name__)
 
 ESTADOS = ("ACTIVO", "INACTIVO")
+CAMPO_PADRE = "id_categoria_padre"
+
+
+def no_existe():
+    return ApiError("NO_EXISTE", "La categoría no existe.", 404)
+
+
+def con_subcategorias(cursor, categoria):
+    """Una raíz lleva todas sus subcategorías; una subcategoría no lleva el campo."""
+    if categoria["id_categoria_padre"] is None:
+        id_categoria = categoria["id_categoria"]
+        categoria["subcategorias"] = repo.subcategorias_por_padre(cursor, [id_categoria])[
+            id_categoria
+        ]
+    return categoria
+
+
+def leer_cuerpo():
+    """Valida el cuerpo de POST y PUT. Los campos desconocidos se ignoran."""
+    datos = leer_json()
+    errores = Errores()
+    nombre = texto_obligatorio(errores, datos, "nombre", 100)
+    descripcion = texto_opcional(errores, datos, "descripcion", 255)
+    id_padre = entero_opcional(errores, datos, CAMPO_PADRE, minimo=1)
+    errores.lanzar_si_hay()
+    return nombre, descripcion, id_padre
+
+
+def validar_padre(cursor, id_padre):
+    """El padre debe existir, estar ACTIVO y ser raíz (máximo dos niveles)."""
+    if id_padre is None:
+        return
+    padre = repo.obtener_bloqueando(cursor, id_padre)
+    if padre is None:
+        mensaje = "La categoría padre no existe."
+    elif padre["estado"] != "ACTIVO":
+        mensaje = "La categoría padre está inactiva."
+    elif padre["id_categoria_padre"] is not None:
+        mensaje = "La categoría padre debe ser una categoría raíz (máximo dos niveles)."
+    else:
+        return
+    raise ApiError("VALIDACION", "Revisa los campos enviados.", 422, {CAMPO_PADRE: [mensaje]})
+
+
+def validar_nombre_libre(cursor, nombre, id_padre, excluir_id=None):
+    if repo.nombre_repetido(cursor, nombre, id_padre, excluir_id):
+        raise ApiError(
+            "NOMBRE_REPETIDO",
+            "Ya existe una categoría con ese nombre en el mismo nivel.",
+            409,
+            {"nombre": ["Ya existe una categoría con ese nombre en el mismo nivel."]},
+        )
 
 
 @categorias_bp.get("/categorias")
@@ -41,11 +100,49 @@ def obtener_categoria(id_categoria):
     with transaccion() as cursor:
         categoria = repo.obtener(cursor, id_categoria)
         if categoria is None:
-            raise ApiError("NO_EXISTE", "La categoría no existe.", 404)
-        # Una raíz lleva todas sus subcategorías; una subcategoría no lleva el campo.
-        if categoria["id_categoria_padre"] is None:
-            categoria["subcategorias"] = repo.subcategorias_por_padre(
-                cursor, [id_categoria]
-            )[id_categoria]
+            raise no_existe()
+        return jsonify(con_subcategorias(cursor, categoria))
+
+
+@categorias_bp.post("/categorias")
+def crear_categoria():
+    nombre, descripcion, id_padre = leer_cuerpo()
+
+    with transaccion() as cursor:
+        validar_padre(cursor, id_padre)
+        validar_nombre_libre(cursor, nombre, id_padre)
+        id_categoria = repo.insertar(cursor, nombre, descripcion, id_padre)
+        categoria = con_subcategorias(cursor, repo.obtener(cursor, id_categoria))
+
+    return jsonify(categoria), 201
+
+
+@categorias_bp.put("/categorias/<int:id_categoria>")
+def editar_categoria(id_categoria):
+    # D29: reemplazo completo; lo que no venga queda en NULL y el estado no cambia.
+    nombre, descripcion, id_padre = leer_cuerpo()
+
+    with transaccion() as cursor:
+        if repo.obtener_bloqueando(cursor, id_categoria) is None:
+            raise no_existe()
+
+        if id_padre is not None:
+            if id_padre == id_categoria:
+                raise ApiError(
+                    "VALIDACION", "Revisa los campos enviados.", 422,
+                    {CAMPO_PADRE: ["Una categoría no puede ser su propio padre."]},
+                )
+            if repo.contar_subcategorias(cursor, id_categoria) > 0:
+                raise ApiError(
+                    "VALIDACION", "Revisa los campos enviados.", 422,
+                    {CAMPO_PADRE: [
+                        "La categoría tiene subcategorías y no puede pasar a ser subcategoría."
+                    ]},
+                )
+            validar_padre(cursor, id_padre)
+
+        validar_nombre_libre(cursor, nombre, id_padre, excluir_id=id_categoria)
+        repo.actualizar(cursor, id_categoria, nombre, descripcion, id_padre)
+        categoria = con_subcategorias(cursor, repo.obtener(cursor, id_categoria))
 
     return jsonify(categoria)
