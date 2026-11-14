@@ -18,4 +18,7 @@ def cargar_configuracion():
         # ms-productos, para validar el SKU antes de cada movimiento (D39)
         "PRODUCTOS_URL": os.getenv("PRODUCTOS_URL", "http://127.0.0.1:5001").rstrip("/"),
         "PRODUCTOS_TIMEOUT": float(os.getenv("PRODUCTOS_TIMEOUT", "3.0")),
+        # RabbitMQ (D48): vacío desactiva la publicación; RABBITMQ_HOST reemplaza el host
+        "RABBITMQ_URL": os.getenv("RABBITMQ_URL", "").strip(),
+        "RABBITMQ_HOST": os.getenv("RABBITMQ_HOST", "").strip(),
     }
