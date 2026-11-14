@@ -8,6 +8,7 @@ use App\Services\ProxyServicios;
 use Illuminate\Http\Client\Response as RespuestaServicio;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response as RespuestaHttp;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -22,7 +23,7 @@ class ProxyController extends Controller
 
     public function __construct(private readonly ProxyServicios $proxy) {}
 
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request): RespuestaHttp
     {
         $ruta = $this->rutaCruda($request);
         $decodificada = $this->validarRuta($ruta);
@@ -32,6 +33,11 @@ class ProxyController extends Controller
         $permiso = $this->permisoRequerido($request->method(), $decodificada);
         if ($permiso !== null && ! $request->user()->tienePermiso($permiso)) {
             throw new ErrorApi('SIN_PERMISO', 'No tienes permiso para esta operación.', 403);
+        }
+
+        // Única composición del gateway: productos de un proveedor (G11)
+        if ($request->isMethod('GET') && $decodificada === 'productos' && $request->query->has('id_proveedor')) {
+            return app(ComposicionProductosController::class)($request);
         }
 
         $consulta = $request->server('QUERY_STRING');
