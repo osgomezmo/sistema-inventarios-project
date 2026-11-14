@@ -340,6 +340,7 @@ def test_sin_token_da_401(cliente, ruta):
     verificar_error(cliente.get(ruta), 401, "NO_AUTENTICADO")
 
 
-@pytest.mark.parametrize("ruta", ["/movimientos", "/movimientos/1"])
-def test_post_no_permitido_todavia(cliente, ruta):
-    verificar_error(cliente.post(ruta, headers=CABECERAS, json={}), 405, "METODO_NO_PERMITIDO")
+def test_post_sobre_un_movimiento_no_esta_permitido(cliente):
+    # POST /movimientos sí existe (D44); sobre un movimiento concreto no: el kardex es inmutable.
+    respuesta = cliente.post("/movimientos/1", headers=CABECERAS, json={})
+    verificar_error(respuesta, 405, "METODO_NO_PERMITIDO")
