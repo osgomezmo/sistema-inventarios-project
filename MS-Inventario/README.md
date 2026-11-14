@@ -73,3 +73,45 @@ docker compose exec app python -m db.aplicar_migraciones
 ```
 
 Para solo apagar los servicios y conservar los datos: `docker compose down`.
+
+## Endpoints
+
+Base local: `http://127.0.0.1:5002`. Dentro de la red `redapi`: `http://ms-inventario:5000`. Desde fuera, el gateway publica cada ruta como `/api/<ruta>`. Los roles los aplica el gateway; el servicio solo exige el token de servicio.
+
+| Método | Ruta | Descripción | Roles |
+|---|---|---|---|
+| GET | `/health` | Estado del servicio (sin token) | Sondas |
+| GET | `/bodegas` | Listado; `?estado` | Todos |
+| GET | `/bodegas/{id}` | Una bodega | Todos |
+| POST | `/bodegas` | Crea `{codigo, nombre, direccion}` | Admin, Jefe |
+| PUT | `/bodegas/{id}` | Cambia `{nombre, direccion}` | Admin, Jefe |
+| POST | `/bodegas/{id}/inactivar` y `/activar` | Cambia el estado | Admin, Jefe |
+| GET | `/stock` | Saldos; `?sku&id_bodega&bajo_minimo` | Todos |
+| GET | `/stock/{sku}` | Saldo por bodega y total | Todos |
+| POST | `/movimientos` | Salida o ajuste `{sku, id_bodega, tipo, cantidad, costo_unitario?, motivo?, documento_referencia?}` | Admin, Jefe |
+| GET | `/movimientos` | Listado; `?sku&id_bodega&tipo&desde&hasta` | Admin, Jefe, Gerente |
+| GET | `/movimientos/{id}` | Un movimiento | Admin, Jefe, Gerente |
+| GET | `/kardex` | `?sku&id_bodega&desde&hasta` (obligatorios) | Admin, Jefe, Gerente |
+| POST | `/traslados` | `{sku, id_bodega_origen, id_bodega_destino, cantidad, motivo?}` | Admin, Jefe |
+| GET | `/traslados` y `/traslados/{id}` | Listado (`?sku&desde&hasta`) y detalle | Admin, Jefe, Gerente |
+| POST | `/devoluciones-cliente` | `{sku, id_bodega, cantidad, factura_pos, motivo}` | Admin, Jefe |
+| GET | `/devoluciones-cliente` | Listado; `?sku&desde&hasta` | Admin, Jefe, Gerente |
+
+Cabeceras:
+
+- `Authorization: Bearer <SERVICE_TOKEN>` en todas las rutas salvo `/health`; sin él, 401.
+- `X-User-Id` (entero positivo): obligatoria en `POST /movimientos`, `/traslados` y `/devoluciones-cliente`; sin ella, 400.
+- `X-Correlation-Id`: opcional; se reenvía a ms-productos.
+
+Listados: `?page=1&per_page=20` (máximo 100) y respuesta `{"data": [...], "meta": {"page", "per_page", "total"}}`. Fechas `desde` y `hasta`: `AAAA-MM-DD` (día completo en Bogotá) o ISO 8601 con hora; las respuestas usan UTC con `Z`. Cantidades y valores salen como números JSON.
+
+Errores: `{"error": {"codigo", "mensaje", "detalles"}}`, donde `detalles` es `{campo: [mensajes]}`. Códigos: 400 petición mal formada, 401 sin token, 404 no existe (`NO_EXISTE`, `PRODUCTO_INEXISTENTE`), 409 conflicto (`STOCK_INSUFICIENTE`, `CODIGO_DUPLICADO`, `CONFLICTO`), 422 validación (`VALIDACION`), 503 ms-productos o la base no responden.
+
+Ejemplo:
+
+```bash
+TOKEN=...   # el valor de SERVICE_TOKEN del .env; nunca se escribe en el código
+curl -H "Authorization: Bearer $TOKEN" -H "X-User-Id: 7" -H "Content-Type: application/json" \
+     -d '{"sku":"LAC-0001","id_bodega":1,"tipo":"SALIDA","cantidad":3}' \
+     http://127.0.0.1:5002/movimientos
+```

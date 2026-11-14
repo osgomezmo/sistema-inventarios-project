@@ -73,3 +73,39 @@ docker compose exec app python -m db.aplicar_migraciones
 ```
 
 Para solo apagar los servicios y conservar los datos: `docker compose down`.
+
+## Endpoints
+
+Base local: `http://127.0.0.1:5001`. Dentro de la red `redapi`: `http://ms-productos:5000`. Desde fuera, el gateway publica cada ruta como `/api/<ruta>`. Los roles los aplica el gateway; el servicio solo exige el token de servicio.
+
+| Método | Ruta | Descripción | Roles |
+|---|---|---|---|
+| GET | `/health` | Estado del servicio (sin token) | Sondas |
+| GET | `/categorias` | Raíces con subcategorías; `?estado&id_padre` | Todos |
+| GET | `/categorias/{id}` | Una categoría | Todos |
+| POST | `/categorias` | Crea `{nombre, descripcion?, id_categoria_padre?}` | Admin |
+| PUT | `/categorias/{id}` | Reemplaza `{nombre, descripcion?, id_categoria_padre?}` | Admin |
+| POST | `/categorias/{id}/inactivar` y `/activar` | Cambia el estado | Admin |
+| GET | `/productos` | Listado; `?q&id_categoria&estado&precio_min&precio_max&skus` | Todos |
+| GET | `/productos/{id}` | Un producto | Todos |
+| GET | `/productos/sku/{sku}` | `{sku, nombre, estado, unidad_medida, stock_minimo, id_categoria}` | Todos e interno (ms-inventario) |
+| POST | `/productos` | Crea `{sku, nombre, descripcion?, marca, id_categoria, unidad_medida, precio_venta, stock_minimo}` | Admin |
+| PUT | `/productos/{id}` | Reemplaza lo mismo sin `sku` | Admin |
+| POST | `/productos/{id}/inactivar` y `/activar` | Cambia el estado | Admin |
+
+Cabeceras:
+
+- `Authorization: Bearer <SERVICE_TOKEN>` en todas las rutas salvo `/health`; sin él, 401.
+- `X-Correlation-Id`: opcional, para rastrear la petición en los logs.
+
+Listados: `?page=1&per_page=20` (máximo 100) y respuesta `{"data": [...], "meta": {"page", "per_page", "total"}}`; `?skus` va separado por comas (máximo 100). Precios y stock mínimo salen como números JSON.
+
+Errores: `{"error": {"codigo", "mensaje", "detalles"}}`, donde `detalles` es `{campo: [mensajes]}`. Códigos: 400 cuerpo que no es JSON, 401 sin token, 404 `NO_EXISTE`, 409 `NOMBRE_REPETIDO`, `SKU_DUPLICADO`, `CATEGORIA_CON_PRODUCTOS` o `CONFLICTO`, 422 `VALIDACION`, 503 la base no responde.
+
+Ejemplo:
+
+```bash
+TOKEN=...   # el valor de SERVICE_TOKEN del .env; nunca se escribe en el código
+curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:5001/productos?q=leche&per_page=10"
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:5001/productos/sku/LAC-0001
+```
