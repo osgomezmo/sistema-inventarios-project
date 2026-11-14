@@ -1,0 +1,167 @@
+{
+  "rabbit_version": "4.0.0",
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "inventario.eventos",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "inventario.errores",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "q.inventario",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+        "x-dead-letter-exchange": "inventario.errores",
+        "x-dead-letter-routing-key": "q.inventario.errores"
+      }
+    },
+    {
+      "name": "q.reportes",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+        "x-dead-letter-exchange": "inventario.errores",
+        "x-dead-letter-routing-key": "q.reportes.errores"
+      }
+    },
+    {
+      "name": "q.notificaciones",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+        "x-dead-letter-exchange": "inventario.errores",
+        "x-dead-letter-routing-key": "q.notificaciones.errores"
+      }
+    },
+    {
+      "name": "q.inventario.errores",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "q.reportes.errores",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "q.notificaciones.errores",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "inventario.eventos",
+      "vhost": "/",
+      "destination": "q.inventario",
+      "destination_type": "queue",
+      "routing_key": "MercanciaRecibida",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.eventos",
+      "vhost": "/",
+      "destination": "q.inventario",
+      "destination_type": "queue",
+      "routing_key": "DevolucionProveedorRegistrada",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.eventos",
+      "vhost": "/",
+      "destination": "q.reportes",
+      "destination_type": "queue",
+      "routing_key": "MovimientoRegistrado",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.eventos",
+      "vhost": "/",
+      "destination": "q.reportes",
+      "destination_type": "queue",
+      "routing_key": "OrdenCompraActualizada",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.eventos",
+      "vhost": "/",
+      "destination": "q.reportes",
+      "destination_type": "queue",
+      "routing_key": "StockBajoUmbral",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.eventos",
+      "vhost": "/",
+      "destination": "q.notificaciones",
+      "destination_type": "queue",
+      "routing_key": "StockBajoUmbral",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.errores",
+      "vhost": "/",
+      "destination": "q.inventario.errores",
+      "destination_type": "queue",
+      "routing_key": "q.inventario.errores",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.errores",
+      "vhost": "/",
+      "destination": "q.reportes.errores",
+      "destination_type": "queue",
+      "routing_key": "q.reportes.errores",
+      "arguments": {}
+    },
+    {
+      "source": "inventario.errores",
+      "vhost": "/",
+      "destination": "q.notificaciones.errores",
+      "destination_type": "queue",
+      "routing_key": "q.notificaciones.errores",
+      "arguments": {}
+    }
+  ]
+}
