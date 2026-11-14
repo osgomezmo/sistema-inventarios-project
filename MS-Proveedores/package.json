@@ -1,0 +1,32 @@
+{
+  "name": "ms-proveedores",
+  "version": "1.0.0",
+  "description": "Microservicio maestro de proveedores, contactos y productos suministrados (Sistema de Inventarios)",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node db/aplicar_migraciones.js",
+    "test": "jest --runInBand"
+  },
+  "keywords": [
+    "microservicios",
+    "proveedores",
+    "express",
+    "mysql"
+  ],
+  "author": "Equipo Sistema de Inventarios",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.11.5",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
+  }
+}
