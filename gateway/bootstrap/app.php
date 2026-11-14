@@ -1,6 +1,7 @@
 <?php
 
-use Illuminate\Auth\AuthenticationException;
+use App\Exceptions\ManejadorErroresApi;
+use App\Http\Middleware\UsuarioActivo;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,20 +17,19 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // La API no redirige a una página de login: responde 401 en JSON
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
+
+        // Un usuario INACTIVO no puede seguir usando sus tokens (G8)
+        $middleware->alias(['activo' => UsuarioActivo::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
-        // Mismo formato de error que los microservicios: {"error": {codigo, mensaje, detalles}}
-        $exceptions->render(function (AuthenticationException $e, Request $request) {
+        // Todos los errores de /api/* con el formato {"error": {codigo, mensaje, detalles}} (G7)
+        $exceptions->render(function (Throwable $e, Request $request) {
             if ($request->is('api/*')) {
-                return response()->json(['error' => [
-                    'codigo' => 'NO_AUTENTICADO',
-                    'mensaje' => 'Token ausente, inválido o vencido.',
-                    'detalles' => (object) [],
-                ]], 401);
+                return ManejadorErroresApi::responder($e);
             }
         });
     })->create();

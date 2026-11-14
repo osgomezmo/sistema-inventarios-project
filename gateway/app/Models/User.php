@@ -29,6 +29,17 @@ class User extends Authenticatable
         return $this->belongsTo(Rol::class, 'id_rol', 'id_rol');
     }
 
+    /** Códigos de los permisos del rol del usuario. */
+    public function codigosDePermisos(): array
+    {
+        return $this->rol?->permisos()->orderBy('codigo')->pluck('codigo')->all() ?? [];
+    }
+
+    public function tienePermiso(string $codigo): bool
+    {
+        return $this->rol !== null && $this->rol->permisos()->where('codigo', $codigo)->exists();
+    }
+
     /**
      * Get the attributes that should be cast.
      *
