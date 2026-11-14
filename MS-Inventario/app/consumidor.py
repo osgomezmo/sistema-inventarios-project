@@ -1,8 +1,10 @@
 """Consumidor de q.inventario (D49): python -m app.consumidor
 
 Prefetch 1 y ack manual. Confirma solo después de guardar el efecto y publicar
-los eventos resultantes; ante cualquier error rechaza con reentrega, y al
-superar x-delivery-limit RabbitMQ lleva el mensaje a q.inventario.errores (D18).
+los eventos resultantes. Ante un error rechaza con reentrega; desde el intento
+MAX_INTENTOS rechaza sin reentrega y el dead letter exchange lleva el mensaje a
+q.inventario.errores (D18). RabbitMQ 4.4 no cuenta los nack con reentrega para
+x-delivery-limit, por eso el intento se lee de x-acquired-count (D49).
 """
 
 import logging
@@ -15,22 +17,38 @@ from app.eventos import parametros_conexion, publicar_movimiento
 from app.servicios.eventos_entrantes import identificar, procesar_evento
 
 COLA = "q.inventario"
+MAX_INTENTOS = 3
 ESPERA_RECONEXION = 5
 
 registro = logging.getLogger("app.consumidor")
 
 
+def numero_de_intento(propiedades):
+    """Entregas previas del mensaje: x-acquired-count, si no x-delivery-count, si no 0."""
+    cabeceras = getattr(propiedades, "headers", None) or {}
+    for nombre in ("x-acquired-count", "x-delivery-count"):
+        valor = cabeceras.get(nombre)
+        if isinstance(valor, int) and not isinstance(valor, bool):
+            return valor
+    return 0
+
+
 def manejar(canal, metodo, propiedades, cuerpo, config):
     """Procesa un mensaje y lo confirma o lo rechaza."""
     id_evento, tipo = identificar(cuerpo)
-    intento = (propiedades.headers or {}).get("x-delivery-count", 0)
+    intento = numero_de_intento(propiedades)
     try:
         procesamiento = procesar_evento(cuerpo)
     except Exception as error:
         # Sin el cuerpo: solo lo necesario para rastrear el mensaje
-        registro.warning("Evento %s (%s) rechazado en el intento %s: %s",
-                         id_evento, tipo, intento, type(error).__name__)
-        canal.basic_nack(delivery_tag=metodo.delivery_tag, requeue=True)
+        if intento >= MAX_INTENTOS:
+            registro.error("Evento %s (%s) enviado a la cola de errores en el intento %s: %s",
+                           id_evento, tipo, intento, type(error).__name__)
+            canal.basic_nack(delivery_tag=metodo.delivery_tag, requeue=False)
+        else:
+            registro.warning("Evento %s (%s) rechazado en el intento %s: %s",
+                             id_evento, tipo, intento, type(error).__name__)
+            canal.basic_nack(delivery_tag=metodo.delivery_tag, requeue=True)
         return
 
     if procesamiento.ya_procesado:
