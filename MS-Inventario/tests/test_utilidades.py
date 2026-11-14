@@ -7,6 +7,7 @@ from app.errors import ApiError
 from app.paginacion import leer_paginacion, respuesta_paginada
 from app.validacion import (
     Errores,
+    booleano_opcional,
     codigo_bodega,
     decimal_obligatorio,
     decimal_opcional,
@@ -373,3 +374,29 @@ def test_codigo_bodega_invalido(valor):
     errores = Errores()
     assert codigo_bodega(errores, {"codigo": valor}, "codigo", 10) is None
     assert list(errores.detalles) == ["codigo"]
+
+
+@pytest.mark.parametrize(
+    "valor, esperado, hay_error",
+    [
+        (None, None, False),
+        ("", None, False),
+        ("   ", None, False),
+        ("true", True, False),
+        ("TRUE", True, False),
+        (" True ", True, False),
+        ("false", False, False),
+        ("FALSE", False, False),
+        ("maybe", None, True),
+        ("1", None, True),
+        ("0", None, True),
+        ("si", None, True),
+        (True, None, True),
+    ],
+)
+def test_booleano_opcional(valor, esperado, hay_error):
+    errores = Errores()
+    assert booleano_opcional(errores, {"bajo_minimo": valor}, "bajo_minimo") is esperado
+    assert bool(errores) is hay_error
+    if hay_error:
+        assert list(errores.detalles) == ["bajo_minimo"]

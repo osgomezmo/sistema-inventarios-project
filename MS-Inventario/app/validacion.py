@@ -213,3 +213,23 @@ def codigo_bodega(errores, datos, campo, maximo):
     return _codigo(
         errores, datos, campo, maximo, PATRON_CODIGO_BODEGA,
         "Solo admite letras, dígitos, guion y guion bajo, sin espacios.")
+
+
+def booleano_opcional(errores, datos, campo):
+    """Booleano de la query string: "true" o "false", sin distinguir mayúsculas.
+
+    Ausente o vacío devuelve None; cualquier otro valor agrega un error.
+    """
+    valor = datos.get(campo)
+    if valor is None:
+        return None
+    if not isinstance(valor, str):
+        errores.agregar(campo, "Debe ser true o false.")
+        return None
+    texto = valor.strip().lower()
+    if texto == "":
+        return None
+    if texto in ("true", "false"):
+        return texto == "true"
+    errores.agregar(campo, "Debe ser true o false.")
+    return None
