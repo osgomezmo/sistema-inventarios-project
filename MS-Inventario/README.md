@@ -74,6 +74,25 @@ docker compose exec app python -m db.aplicar_migraciones
 
 Para solo apagar los servicios y conservar los datos: `docker compose down`.
 
+## Eventos
+
+ms-inventario publica `MovimientoRegistrado` por cada movimiento y `StockBajoUmbral` cuando un saldo cruza su mínimo, después de confirmar el movimiento; si el broker no responde, el movimiento se guarda igual y el fallo queda en el log. Consume `MercanciaRecibida` y `DevolucionProveedorRegistrada` de `q.inventario` con el servicio `consumidor` del docker-compose: cada evento se aplica una sola vez (tabla `eventos_procesados`) y uno que falla se reintenta hasta pasar a `q.inventario.errores`.
+
+El broker es el de `infra/rabbitmq`. `RABBITMQ_URL` va en el `.env` con el usuario y la contraseña de `infra/rabbitmq/.env`; dentro de Compose el host lo fija `RABBITMQ_HOST`. El broker debe estar en la red compartida (repetirlo cada vez que se recrea su contenedor):
+
+```bash
+docker network connect redapi rabbitmq-inventario
+```
+
+Ese broker carga `definitions.json` al arrancar y por eso no crea usuarios. Si no tiene ninguno, créalo con los valores de `infra/rabbitmq/.env` (también tras cada recreación del contenedor):
+
+```bash
+docker exec -i rabbitmq-inventario rabbitmqctl add_user <usuario>   # pide la contraseña
+docker exec rabbitmq-inventario rabbitmqctl set_permissions -p / <usuario> ".*" ".*" ".*"
+```
+
+Logs del consumidor: `docker compose logs -f consumidor`.
+
 ## Endpoints
 
 Base local: `http://127.0.0.1:5002`. Dentro de la red `redapi`: `http://ms-inventario:5000`. Desde fuera, el gateway publica cada ruta como `/api/<ruta>`. Los roles los aplica el gateway; el servicio solo exige el token de servicio.

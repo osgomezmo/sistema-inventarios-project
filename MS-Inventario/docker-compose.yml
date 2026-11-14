@@ -11,6 +11,8 @@ services:
       DB_PORT: "3306"
       # ms-productos por su alias en la red compartida redapi (D40)
       PRODUCTOS_URL: http://ms-productos:5000
+      # Broker de infra/rabbitmq, conectado a redapi (D48)
+      RABBITMQ_HOST: rabbitmq-inventario
     ports:
       - "127.0.0.1:5002:5000"
     depends_on:
@@ -22,6 +24,26 @@ services:
         # Otros servicios lo alcanzan por este nombre (D40)
         aliases:
           - ms-inventario
+
+  # Consumidor de q.inventario: misma imagen, otro comando (D49)
+  consumidor:
+    build: .
+    image: ms-inventario:dev
+    container_name: ms-inventario-consumidor
+    command: ["python", "-m", "app.consumidor"]
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      PRODUCTOS_URL: http://ms-productos:5000
+      RABBITMQ_HOST: rabbitmq-inventario
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      default:
+      redapi:
 
   mysql:
     image: mysql:8.4
