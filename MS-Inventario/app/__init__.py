@@ -5,6 +5,7 @@ from app.config import cargar_configuracion
 from app.errors import registrar_manejadores_de_error
 from app.json_provider import ProveedorJson
 from app.routes.bodegas import bodegas_bp
+from app.routes.devoluciones import devoluciones_bp
 from app.routes.health import health_bp
 from app.routes.kardex import kardex_bp
 from app.routes.movimientos import movimientos_bp
@@ -30,5 +31,6 @@ def create_app(config=None):
     app.register_blueprint(movimientos_bp)
     app.register_blueprint(kardex_bp)
     app.register_blueprint(traslados_bp)
+    app.register_blueprint(devoluciones_bp)
 
     return app
