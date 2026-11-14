@@ -9,11 +9,19 @@ services:
       # y por su puerto interno.
       DB_HOST: mysql
       DB_PORT: "3306"
+      # ms-productos por su alias en la red compartida redapi (D40)
+      PRODUCTOS_URL: http://ms-productos:5000
     ports:
       - "127.0.0.1:5002:5000"
     depends_on:
       mysql:
         condition: service_healthy
+    networks:
+      default:
+      redapi:
+        # Otros servicios lo alcanzan por este nombre (D40)
+        aliases:
+          - ms-inventario
 
   mysql:
     image: mysql:8.4
@@ -38,3 +46,8 @@ services:
 
 volumes:
   ms_inventario_mysql:
+
+networks:
+  # Red compartida entre servicios; se crea una vez: docker network create redapi
+  redapi:
+    external: true

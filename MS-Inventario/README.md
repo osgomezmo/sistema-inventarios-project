@@ -13,6 +13,18 @@ cp .env.example .env    # cambia SERVICE_TOKEN y DB_PASSWORD
 
 `requirements.txt` tiene solo las dependencias de ejecución, que son las que instala la imagen Docker. `requirements-dev.txt` las incluye y agrega las de pruebas.
 
+## Red compartida entre servicios
+
+Cada servicio tiene su propio `docker-compose.yml`. Para que los contenedores se hablen entre sí, el servicio `app` se une también a la red externa `redapi`, donde se le encuentra por su alias (`ms-productos` o `ms-inventario`, puerto 5000). Las bases de datos no se unen a esa red.
+
+La red se crea una sola vez, antes del primer `docker compose up`:
+
+```bash
+docker network inspect redapi >/dev/null 2>&1 || docker network create redapi
+```
+
+ms-inventario consulta a ms-productos en `http://ms-productos:5000` (variable `PRODUCTOS_URL`, que el compose fija para el contenedor). Fuera de Docker se usa la del `.env`, por defecto `http://127.0.0.1:5001`. Los puertos publicados en `127.0.0.1` del host no son alcanzables desde otro contenedor.
+
 ## Levantar todo con Docker Compose
 
 ```bash
