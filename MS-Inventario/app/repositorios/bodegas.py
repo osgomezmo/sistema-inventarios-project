@@ -51,3 +51,9 @@ def actualizar(cursor, id_bodega, nombre, direccion):
         "UPDATE bodegas SET nombre = %s, direccion = %s WHERE id_bodega = %s",
         (nombre, direccion, id_bodega),
     )
+
+
+def actualizar_estado(cursor, id_bodega, estado):
+    cursor.execute(
+        "UPDATE bodegas SET estado = %s WHERE id_bodega = %s", (estado, id_bodega)
+    )

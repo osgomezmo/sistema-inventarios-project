@@ -90,3 +90,28 @@ def editar_bodega(id_bodega):
         bodega = repo.obtener(cursor, id_bodega)
 
     return jsonify(bodega)
+
+
+def cambiar_estado(id_bodega, estado):
+    """Pasa la bodega a `estado`. Idempotente: si ya lo tiene, no ejecuta UPDATE.
+    Solo se bloquea la fila de la bodega."""
+    with transaccion() as cursor:
+        bodega = repo.obtener_bloqueando(cursor, id_bodega)
+        if bodega is None:
+            raise no_existe()
+        if bodega["estado"] != estado:
+            repo.actualizar_estado(cursor, id_bodega, estado)
+            bodega["estado"] = estado
+    return jsonify(bodega)
+
+
+@bodegas_bp.post("/bodegas/<int:id_bodega>/inactivar")
+def inactivar_bodega(id_bodega):
+    # El cuerpo, si viene, se ignora.
+    return cambiar_estado(id_bodega, "INACTIVO")
+
+
+@bodegas_bp.post("/bodegas/<int:id_bodega>/activar")
+def activar_bodega(id_bodega):
+    # El cuerpo, si viene, se ignora.
+    return cambiar_estado(id_bodega, "ACTIVO")
