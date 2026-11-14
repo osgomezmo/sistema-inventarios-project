@@ -9,6 +9,7 @@ from app.routes.health import health_bp
 from app.routes.kardex import kardex_bp
 from app.routes.movimientos import movimientos_bp
 from app.routes.stock import stock_bp
+from app.routes.traslados import traslados_bp
 
 
 def create_app(config=None):
@@ -28,5 +29,6 @@ def create_app(config=None):
     app.register_blueprint(stock_bp)
     app.register_blueprint(movimientos_bp)
     app.register_blueprint(kardex_bp)
+    app.register_blueprint(traslados_bp)
 
     return app
