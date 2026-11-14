@@ -6,7 +6,9 @@ revisan y devuelven el valor ya normalizado. Al final se llama a
 """
 
 import re
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 from flask import request
 
@@ -233,3 +235,73 @@ def booleano_opcional(errores, datos, campo):
         return texto == "true"
     errores.agregar(campo, "Debe ser true o false.")
     return None
+
+
+ZONA_BOGOTA = ZoneInfo("America/Bogota")
+ANIO_MINIMO, ANIO_MAXIMO = 2000, 2100
+PATRON_SOLO_FECHA = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+PATRON_FECHA_HORA = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?"
+    r"(Z|[+-]\d{2}:\d{2})?"
+)
+MENSAJE_FECHA = "Usa AAAA-MM-DD o AAAA-MM-DDTHH:MM[:SS] con Z o ±HH:MM opcional."
+
+
+def _zona(texto):
+    """Z, ±HH:MM o None (sin zona se interpreta como UTC)."""
+    if texto is None or texto == "Z":
+        return timezone.utc
+    signo = 1 if texto[0] == "+" else -1
+    horas, minutos = int(texto[1:3]), int(texto[4:6])
+    if horas > 23 or minutos > 59:
+        raise ValueError("desplazamiento inválido")
+    return timezone(signo * timedelta(hours=horas, minutes=minutos))
+
+
+def fecha_opcional(errores, campo, valor, *, limite_superior=False):
+    """Fecha de un filtro desde/hasta (D15, D43).
+
+    Devuelve None si falta o está vacía, o (instante, inclusivo), con el
+    instante en UTC sin zona para compararlo con las columnas DATETIME.
+    AAAA-MM-DD es el día completo en America/Bogota: como límite superior
+    devuelve el inicio del día siguiente, exclusivo. Con hora, el límite es
+    inclusivo. Comparar desde con hasta le corresponde a quien llama.
+    """
+    if valor is None:
+        return None
+    if not isinstance(valor, str):
+        errores.agregar(campo, MENSAJE_FECHA)
+        return None
+    texto = valor.strip()
+    if not texto:
+        return None
+
+    try:
+        solo_fecha = PATRON_SOLO_FECHA.fullmatch(texto)
+        con_hora = None if solo_fecha else PATRON_FECHA_HORA.fullmatch(texto)
+        if solo_fecha:
+            anio = int(solo_fecha.group(1))
+            dia = date(anio, int(solo_fecha.group(2)), int(solo_fecha.group(3)))
+            if limite_superior:
+                dia += timedelta(days=1)
+            local = datetime(dia.year, dia.month, dia.day, tzinfo=ZONA_BOGOTA)
+            inclusivo = not limite_superior
+        elif con_hora:
+            anio, mes, dia_mes, hora, minuto, segundo, fraccion, zona = con_hora.groups()
+            anio = int(anio)
+            local = datetime(
+                anio, int(mes), int(dia_mes), int(hora), int(minuto), int(segundo or 0),
+                int((fraccion or "0").ljust(6, "0")), tzinfo=_zona(zona),
+            )
+            inclusivo = True
+        else:
+            errores.agregar(campo, MENSAJE_FECHA)
+            return None
+    except (ValueError, OverflowError):
+        errores.agregar(campo, "La fecha no existe o tiene un formato inválido.")
+        return None
+
+    if not ANIO_MINIMO <= anio <= ANIO_MAXIMO:
+        errores.agregar(campo, f"El año debe estar entre {ANIO_MINIMO} y {ANIO_MAXIMO}.")
+        return None
+    return local.astimezone(timezone.utc).replace(tzinfo=None), inclusivo

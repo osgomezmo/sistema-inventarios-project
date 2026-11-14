@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 import pytest
@@ -13,6 +14,7 @@ from app.validacion import (
     decimal_opcional,
     entero_obligatorio,
     entero_opcional,
+    fecha_opcional,
     leer_json,
     lista_separada_por_comas,
     opcion,
@@ -400,3 +402,78 @@ def test_booleano_opcional(valor, esperado, hay_error):
     assert bool(errores) is hay_error
     if hay_error:
         assert list(errores.detalles) == ["bajo_minimo"]
+
+
+# --- Fechas de filtros (D43) ----------------------------------------------------
+
+
+def fecha(valor, limite_superior=False):
+    errores = Errores()
+    resultado = fecha_opcional(errores, "desde", valor, limite_superior=limite_superior)
+    return resultado, errores.detalles
+
+
+def test_solo_fecha_como_desde_es_el_inicio_del_dia_en_bogota():
+    assert fecha("2026-11-10") == ((datetime(2026, 11, 10, 5, 0, 0), True), {})
+
+
+def test_solo_fecha_como_hasta_es_el_inicio_del_dia_siguiente_exclusivo():
+    assert fecha("2026-11-10", limite_superior=True) == ((datetime(2026, 11, 11, 5, 0, 0), False), {})
+
+
+def test_fin_de_mes_y_de_anio_como_hasta():
+    assert fecha("2026-12-31", limite_superior=True)[0] == (datetime(2027, 1, 1, 5, 0, 0), False)
+
+
+@pytest.mark.parametrize(
+    "valor, esperado",
+    [
+        ("2026-11-10T05:00:00Z", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T05:00:00+00:00", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T00:00:00-05:00", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T10:30:00+05:30", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T05:00:00", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T05:00", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T05:00Z", datetime(2026, 11, 10, 5, 0, 0)),
+        ("2026-11-10T05:00:00.5Z", datetime(2026, 11, 10, 5, 0, 0, 500000)),
+        ("2026-11-10T05:00:00.123456", datetime(2026, 11, 10, 5, 0, 0, 123456)),
+        ("  2026-11-10T05:00:00Z  ", datetime(2026, 11, 10, 5, 0, 0)),
+    ],
+)
+@pytest.mark.parametrize("limite_superior", [False, True])
+def test_fecha_con_hora_es_inclusiva(valor, esperado, limite_superior):
+    assert fecha(valor, limite_superior) == ((esperado, True), {})
+
+
+def test_espacios_alrededor_de_solo_fecha():
+    assert fecha("  2026-11-10 ")[0] == (datetime(2026, 11, 10, 5, 0, 0), True)
+
+
+@pytest.mark.parametrize("valor", [None, "", "   "])
+def test_fecha_vacia_es_none(valor):
+    assert fecha(valor) == (None, {})
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        "abc", "2026-13-45", "2026-02-30", "10/11/2026", "1999-12-31", "2101-01-01",
+        "2026-1-10", "2026-11-1", "2026-11-10T5:00", "2026-11-10T25:00:00Z",
+        "2026-11-10T05:00:00+24:00", "2026-11-10 05:00:00", "2026-11-10t05:00", 20261110,
+    ],
+)
+def test_fecha_invalida_da_error(valor):
+    resultado, detalles = fecha(valor)
+    assert resultado is None
+    assert list(detalles) == ["desde"] and len(detalles["desde"]) == 1
+
+
+def test_anio_fuera_de_rango_con_hora():
+    assert fecha("2101-01-01T00:00:00Z")[1] == {"desde": ["El año debe estar entre 2000 y 2100."]}
+
+
+def test_desde_mayor_que_hasta_no_lo_revisa_el_validador():
+    errores = Errores()
+    assert fecha_opcional(errores, "desde", "2026-12-01") is not None
+    assert fecha_opcional(errores, "hasta", "2026-11-01", limite_superior=True) is not None
+    assert not errores
