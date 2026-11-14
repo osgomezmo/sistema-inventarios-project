@@ -5,6 +5,9 @@ const correlationMiddleware = require('./middlewares/correlation');
 const authMiddleware = require('./middlewares/auth');
 const { notFoundHandler, errorHandler } = require('./middlewares/errorHandler');
 
+const dispositivosRoutes = require('./routes/dispositivos.routes');
+const notificacionesRoutes = require('./routes/notificaciones.routes');
+
 const app = express();
 
 // Middlewares globales de parsing y CORS
@@ -25,7 +28,9 @@ app.get('/health', (req, res) => {
 // A partir de aquí, todas las rutas exigen autenticación interna por SERVICE_TOKEN
 app.use(authMiddleware);
 
-// Rutas de negocio se montarán en siguientes pasos (dispositivos, notificaciones)
+// Rutas del microservicio
+app.use('/dispositivos', dispositivosRoutes);
+app.use('/notificaciones', notificacionesRoutes);
 
 // Manejo de recursos inexistentes (404) y errores globales
 app.use(notFoundHandler);
