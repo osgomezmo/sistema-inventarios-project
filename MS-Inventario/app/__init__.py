@@ -6,6 +6,7 @@ from app.errors import registrar_manejadores_de_error
 from app.json_provider import ProveedorJson
 from app.routes.bodegas import bodegas_bp
 from app.routes.health import health_bp
+from app.routes.movimientos import movimientos_bp
 from app.routes.stock import stock_bp
 
 
@@ -24,5 +25,6 @@ def create_app(config=None):
     app.register_blueprint(health_bp)
     app.register_blueprint(bodegas_bp)
     app.register_blueprint(stock_bp)
+    app.register_blueprint(movimientos_bp)
 
     return app
