@@ -15,4 +15,7 @@ def cargar_configuracion():
         "DB_USER": os.getenv("DB_USER", ""),
         "DB_PASSWORD": os.getenv("DB_PASSWORD", ""),
         "DB_NAME": os.getenv("DB_NAME", "ms_inventario"),
+        # ms-productos, para validar el SKU antes de cada movimiento (D39)
+        "PRODUCTOS_URL": os.getenv("PRODUCTOS_URL", "http://127.0.0.1:5001").rstrip("/"),
+        "PRODUCTOS_TIMEOUT": float(os.getenv("PRODUCTOS_TIMEOUT", "3.0")),
     }
