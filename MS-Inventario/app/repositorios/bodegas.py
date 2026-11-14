@@ -25,3 +25,29 @@ def listar(cursor, estado, limite, offset):
 def obtener(cursor, id_bodega):
     cursor.execute(f"SELECT {COLUMNAS} FROM bodegas WHERE id_bodega = %s", (id_bodega,))
     return cursor.fetchone()
+
+
+def obtener_bloqueando(cursor, id_bodega):
+    """Como `obtener`, pero bloquea la fila hasta el fin de la transacción."""
+    cursor.execute(
+        f"SELECT {COLUMNAS} FROM bodegas WHERE id_bodega = %s FOR UPDATE", (id_bodega,)
+    )
+    return cursor.fetchone()
+
+
+def insertar(cursor, codigo, nombre, direccion):
+    """Inserta una bodega ACTIVA y devuelve su id. Un código repetido lanza
+    IntegrityError (errno 1062) por el índice único."""
+    cursor.execute(
+        "INSERT INTO bodegas (codigo, nombre, direccion) VALUES (%s, %s, %s)",
+        (codigo, nombre, direccion),
+    )
+    return cursor.lastrowid
+
+
+def actualizar(cursor, id_bodega, nombre, direccion):
+    """Reemplaza nombre y dirección. El código y el estado no se tocan."""
+    cursor.execute(
+        "UPDATE bodegas SET nombre = %s, direccion = %s WHERE id_bodega = %s",
+        (nombre, direccion, id_bodega),
+    )
