@@ -14,6 +14,12 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    networks:
+      default:
+      redapi:
+        # Otros servicios lo alcanzan por este nombre (D40)
+        aliases:
+          - ms-productos
 
   mysql:
     image: mysql:8.4
@@ -38,3 +44,8 @@ services:
 
 volumes:
   ms_productos_mysql:
+
+networks:
+  # Red compartida entre servicios; se crea una vez: docker network create redapi
+  redapi:
+    external: true
