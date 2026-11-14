@@ -4,6 +4,7 @@ Se abre una conexión por petición. Todas las consultas deben ir
 parametrizadas con %s; nunca se concatenan valores dentro del SQL.
 """
 
+import logging
 from contextlib import contextmanager
 
 import mysql.connector
@@ -12,6 +13,7 @@ from flask import current_app
 from app.errors import ApiError
 
 MENSAJE_SIN_BASE = "La base de datos no está disponible."
+registro = logging.getLogger(__name__)
 
 
 def _configuracion(config):
@@ -69,3 +71,30 @@ def transaccion(config=None):
         if cursor is not None:
             cursor.close()
         conexion.close()
+
+
+ERROR_INTERBLOQUEO = 1213
+ERROR_ESPERA_BLOQUEO = 1205
+
+
+def _conflicto():
+    return ApiError("CONFLICTO", "La operación coincidió con otra; intenta de nuevo.", 409)
+
+
+def ejecutar_con_reintento(funcion):
+    """Ejecuta `funcion` (que abre y cierra su propia transacción) y la repite
+    una vez completa si MySQL la elige como víctima de un interbloqueo.
+
+    Un segundo interbloqueo o una espera de bloqueo agotada responden 409
+    CONFLICTO. Cualquier otro error se propaga igual.
+    """
+    for intento in (1, 2):
+        try:
+            return funcion()
+        except mysql.connector.Error as error:
+            if error.errno == ERROR_INTERBLOQUEO and intento == 1:
+                registro.warning("Interbloqueo en MySQL; se repite la transacción.")
+                continue
+            if error.errno in (ERROR_INTERBLOQUEO, ERROR_ESPERA_BLOQUEO):
+                raise _conflicto() from None
+            raise
