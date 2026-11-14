@@ -1,11 +1,12 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProxyController;
 use App\Http\Controllers\RolController;
 use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
-// Rutas de la API pública. El reenvío a los microservicios se agrega más adelante.
+// Rutas de la API pública: primero las propias del gateway y al final el reenvío.
 
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
@@ -24,4 +25,10 @@ Route::middleware(['auth:sanctum', 'activo', 'permiso:usuarios.gestionar'])->gro
     Route::post('/usuarios/{id}/inactivar', [UsuarioController::class, 'inactivar'])->whereNumber('id');
     Route::post('/usuarios/{id}/activar', [UsuarioController::class, 'activar'])->whereNumber('id');
     Route::get('/roles', [RolController::class, 'listar']);
+});
+
+// Reenvío a los microservicios (G10). Debe ir al final: atiende todo lo demás.
+Route::middleware(['auth:sanctum', 'activo'])->group(function () {
+    // Los prefijos propios quedan fuera, para que un método equivocado en ellos dé 405
+    Route::any('/{ruta}', ProxyController::class)->where('ruta', '(?!(auth|usuarios|roles)(/|$)).+');
 });

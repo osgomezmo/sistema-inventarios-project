@@ -6,7 +6,7 @@ use App\Models\Rol;
 use App\Models\User;
 use Database\Seeders\RolesYPermisosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -185,11 +185,13 @@ class AuthTest extends TestCase
 
     public function test_404_y_500_salen_con_el_formato_del_contrato_y_sin_traza(): void
     {
-        config(['app.debug' => true]);
-        Route::get('/api/prueba-error', fn () => throw new RuntimeException('detalle interno'));
+        config(['app.debug' => true, 'gateway.service_token' => 'token-de-servicio-de-prueba']);
+        // Una falla no prevista al llamar a un servicio debe salir como 500 genérico
+        Http::fake(fn () => throw new RuntimeException('detalle interno'));
+        $token = $this->usuario()->createToken('api')->plainTextToken;
 
-        $noExiste = $this->getJson('/api/ruta-que-no-existe');
-        $interno = $this->getJson('/api/prueba-error');
+        $noExiste = $this->conToken($token)->getJson('/api/ruta-que-no-existe');
+        $interno = $this->conToken($token)->getJson('/api/stock');
 
         $this->assertError($noExiste, 404, 'NO_EXISTE');
         $this->assertError($interno, 500, 'ERROR_INTERNO');

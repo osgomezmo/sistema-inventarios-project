@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\ManejadorErroresApi;
+use App\Http\Middleware\IdCorrelacion;
 use App\Http\Middleware\TienePermiso;
 use App\Http\Middleware\UsuarioActivo;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Un usuario INACTIVO no puede seguir usando sus tokens (G8)
         $middleware->alias(['activo' => UsuarioActivo::class, 'permiso' => TienePermiso::class]);
+
+        // X-Correlation-Id en toda respuesta de /api/*, también en los errores (G10)
+        $middleware->append(IdCorrelacion::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
