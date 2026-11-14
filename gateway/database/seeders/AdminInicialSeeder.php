@@ -22,6 +22,9 @@ class AdminInicialSeeder extends Seeder
             throw new RuntimeException("No se puede crear el administrador inicial: faltan {$variables} en .env.");
         }
 
+        // El login compara el correo en minúsculas y sin espacios
+        $datos['email'] = strtolower(trim($datos['email']));
+
         if (User::where('email', $datos['email'])->exists()) {
             return;
         }

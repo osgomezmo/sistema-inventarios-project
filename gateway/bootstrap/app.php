@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\ManejadorErroresApi;
+use App\Http\Middleware\TienePermiso;
 use App\Http\Middleware\UsuarioActivo;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -19,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
 
         // Un usuario INACTIVO no puede seguir usando sus tokens (G8)
-        $middleware->alias(['activo' => UsuarioActivo::class]);
+        $middleware->alias(['activo' => UsuarioActivo::class, 'permiso' => TienePermiso::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
