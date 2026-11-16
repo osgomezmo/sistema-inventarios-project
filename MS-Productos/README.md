@@ -47,12 +47,20 @@ docker compose up -d mysql
 
 ## Crear las tablas
 
-Las tablas se crean con los scripts SQL numerados de `db/` (`001_...`, `002_...`). El aplicador ejecuta en orden los que falten y los registra en la tabla `migraciones_aplicadas`; correrlo otra vez no repite nada.
+Las tablas se crean con los scripts SQL numerados de `db/` (`001_...`, `002_...`); el contenedor `app` los aplica solo al arrancar. El aplicador ejecuta en orden los que falten y los registra en la tabla `migraciones_aplicadas`; correrlo otra vez no repite nada.
 
 ```bash
 docker compose exec app python -m db.aplicar_migraciones   # dentro del contenedor
 .venv/bin/python -m db.aplicar_migraciones                 # o desde el venv
 ```
+
+## Datos iniciales
+
+Al arrancar, el contenedor `app` (script `entrypoint.sh`) espera a MySQL, aplica las migraciones y, si la base no tiene categorías, siembra los datos iniciales de `db/datos_iniciales.py`: 7 categorías raíz con 13 subcategorías (Lácteos, Bebidas, Granos y abarrotes, Aseo, Panadería, Carnes, Frutas y verduras) y 33 productos con SKU por categoría (`LAC-0001`, `BEB-0001`, `GRA-0001`, `ASE-0001`, `PAN-0001`, `CAR-0001`, `FRU-0001`...), dos de ellos inactivos. Reiniciar el contenedor no duplica nada, porque solo se siembra con la base vacía.
+
+- Para no sembrar: `SEMBRAR_DATOS=0` en el `.env`.
+- Para sembrar a mano (también solo si la base está vacía): `.venv/bin/python -m db.datos_iniciales`.
+- Los SKU, unidades y mínimos de estos productos están copiados en los datos iniciales de ms-inventario: si se cambian aquí, hay que cambiarlos allá.
 
 ## Probar
 
@@ -68,8 +76,7 @@ Borra el volumen con todos los datos y vuelve a crear las tablas:
 
 ```bash
 docker compose down -v
-docker compose up -d --build
-docker compose exec app python -m db.aplicar_migraciones
+docker compose up -d --build   # el arranque crea las tablas y siembra los datos iniciales
 ```
 
 Para solo apagar los servicios y conservar los datos: `docker compose down`.
