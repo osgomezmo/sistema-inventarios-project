@@ -47,12 +47,28 @@ docker compose up -d mysql
 
 ## Crear las tablas
 
-Las tablas se crean con los scripts SQL numerados de `db/` (`001_...`, `002_...`). El aplicador ejecuta en orden los que falten y los registra en la tabla `migraciones_aplicadas`; correrlo otra vez no repite nada.
+Las tablas se crean con los scripts SQL numerados de `db/` (`001_...`, `002_...`); el contenedor `app` los aplica solo al arrancar. El aplicador ejecuta en orden los que falten y los registra en la tabla `migraciones_aplicadas`; correrlo otra vez no repite nada.
 
 ```bash
 docker compose exec app python -m db.aplicar_migraciones   # dentro del contenedor
 .venv/bin/python -m db.aplicar_migraciones                 # o desde el venv
 ```
+
+## Datos iniciales
+
+Al arrancar, el contenedor `app` (script `entrypoint.sh`) espera a MySQL, aplica las migraciones y, si la base no tiene bodegas, siembra los datos iniciales de `db/datos_iniciales.py`: las bodegas `BOD-PRINCIPAL` (Bodega principal), `BOD-SALA` (Sala de ventas) y `BOD-NORTE` (Bodega norte) y una semana de operación sobre los 33 productos de los datos iniciales de ms-productos:
+
+- inventario inicial con `AJUSTE_POSITIVO` (motivo "inventario inicial") al costo de compra;
+- ventas en la sala (`SALIDA` con documento `POS-...`);
+- dos traslados de reposición hacia la sala (`TR-{id_traslado}`);
+- una devolución de cliente;
+- dos ventas grandes que dejan `BEB-0001` y `PAN-0001` bajo el mínimo en la sala.
+
+Todo se aplica con el mismo motor de movimientos que usan los endpoints (los saldos nunca se escriben a mano), en una sola transacción, con `id_usuario` 1 y la fecha del sembrado; no se publican eventos. Reiniciar el contenedor no duplica nada, porque solo se siembra con la base vacía.
+
+- Para no sembrar: `SEMBRAR_DATOS=0` en el `.env`. El consumidor ya arranca con `SEMBRAR_DATOS=0` y `MIGRAR_BASE=0`: solo la app migra y siembra.
+- Para sembrar a mano (también solo si la base está vacía): `.venv/bin/python -m db.datos_iniciales`.
+- La lista de SKU (con su unidad y su mínimo) es una copia de la de ms-productos: si cambia allá, hay que cambiarla aquí.
 
 ## Probar
 
@@ -68,8 +84,7 @@ Borra el volumen con todos los datos y vuelve a crear las tablas:
 
 ```bash
 docker compose down -v
-docker compose up -d --build
-docker compose exec app python -m db.aplicar_migraciones
+docker compose up -d --build   # el arranque crea las tablas y siembra los datos iniciales
 ```
 
 Para solo apagar los servicios y conservar los datos: `docker compose down`.

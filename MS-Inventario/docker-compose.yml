@@ -35,6 +35,9 @@ services:
     environment:
       DB_HOST: mysql
       DB_PORT: "3306"
+      # Solo la app migra y siembra (D51)
+      MIGRAR_BASE: "0"
+      SEMBRAR_DATOS: "0"
       PRODUCTOS_URL: http://ms-productos:5000
       RABBITMQ_HOST: rabbitmq-inventario
     depends_on:

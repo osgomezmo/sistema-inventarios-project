@@ -1,8 +1,8 @@
 """Pruebas de la publicación de eventos (D48).
 
 Las unitarias usan un canal falso. La de integración publica en el RabbitMQ real
-(127.0.0.1:5672) y se salta si no responde; retira de q.reportes solo su propio
-mensaje y devuelve los demás.
+(127.0.0.1:5672) y se salta si no responde; lee su mensaje de una cola temporal
+propia enlazada al exchange, sin tocar q.reportes.
 """
 
 import json
@@ -155,35 +155,35 @@ def url_real():
     return url or None
 
 
-def test_integracion_el_evento_llega_a_q_reportes():
+def test_integracion_el_evento_llega_al_exchange():
     url = url_real()
     if url is None:
         pytest.skip("RabbitMQ no disponible en 127.0.0.1:5672 o sin RABBITMQ_URL")
 
-    publicados = eventos.publicar_movimiento(resultado(), "corr-integracion",
-                                             config={"RABBITMQ_URL": url, "RABBITMQ_HOST": ""})
-    assert len(publicados) == 1
-    mio = publicados[0]["id_evento"]
-
     conexion = pika.BlockingConnection(pika.URLParameters(url))
-    canal = conexion.channel()
-    encontrado, ajenos = None, []
     try:
-        for _ in range(1000):
-            metodo, propiedades, cuerpo = canal.basic_get("q.reportes", auto_ack=False)
-            if metodo is None:
+        canal = conexion.channel()
+        # Cola propia: exclusiva, se borra al cerrar y el broker le pone el nombre
+        cola = canal.queue_declare(queue="", exclusive=True, auto_delete=True).method.queue
+        canal.queue_bind(cola, eventos.EXCHANGE, routing_key="MovimientoRegistrado")
+
+        publicados = eventos.publicar_movimiento(resultado(), "corr-integracion",
+                                                 config={"RABBITMQ_URL": url, "RABBITMQ_HOST": ""})
+        assert len(publicados) == 1
+
+        recibido = None
+        for _ in range(50):
+            metodo, propiedades, cuerpo = canal.basic_get(cola, auto_ack=True)
+            if metodo is not None:
+                recibido = (propiedades, json.loads(cuerpo, parse_float=D))
                 break
-            if propiedades.message_id == mio:
-                encontrado = json.loads(cuerpo, parse_float=D)
-                canal.basic_ack(metodo.delivery_tag)  # se retira solo el de la prueba
-                break
-            ajenos.append(metodo.delivery_tag)
+            conexion.sleep(0.1)
     finally:
-        for etiqueta in ajenos:
-            canal.basic_nack(etiqueta, requeue=True)  # los demás vuelven a la cola
         conexion.close()
 
-    assert encontrado is not None
-    assert encontrado["tipo"] == "MovimientoRegistrado"
-    assert encontrado["datos"]["cantidad"] == D("2.500")
-    assert encontrado["id_correlacion"] == "corr-integracion"
+    assert recibido is not None
+    propiedades, sobre = recibido
+    assert propiedades.message_id == publicados[0]["id_evento"] == sobre["id_evento"]
+    assert sobre["tipo"] == "MovimientoRegistrado"
+    assert sobre["datos"]["cantidad"] == D("2.500")
+    assert sobre["id_correlacion"] == "corr-integracion"
