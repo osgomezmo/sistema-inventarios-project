@@ -30,4 +30,9 @@ COPY --from=vendor /app /var/www/html
 RUN php artisan package:discover --ansi \
     && chown -R www-data:www-data storage bootstrap/cache
 
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+
 EXPOSE 80
+
+# Espera a la base, migra, siembra si no hay roles y arranca Apache
+ENTRYPOINT ["entrypoint.sh"]

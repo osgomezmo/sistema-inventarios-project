@@ -7,6 +7,34 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Arranque y usuarios iniciales
+
+```bash
+docker network inspect redapi >/dev/null 2>&1 || docker network create redapi
+docker compose up -d --build   # http://127.0.0.1:8000
+```
+
+Al arrancar, el contenedor `app` (script `entrypoint.sh`) espera a MySQL, aplica las migraciones y, si la base no tiene roles, corre `php artisan gateway:datos-iniciales`, que crea:
+
+- los cuatro roles con sus permisos;
+- el administrador, con `ADMIN_EMAIL`, `ADMIN_NOMBRE` y `ADMIN_PASSWORD` del `.env` (si falta alguna, no se crea y queda un aviso en el log);
+- un usuario por rol, todos con la contraseña de `USUARIOS_INICIALES_PASSWORD` (si está vacía, no se crean y queda un aviso):
+
+| Correo | Rol |
+|---|---|
+| `jefe.bodega@inventario.local` | jefe_bodega |
+| `compras@inventario.local` | compras |
+| `gerente@inventario.local` | gerente |
+
+Reiniciar no duplica nada: con roles en la base no se siembra. Para no sembrar al arrancar: `SEMBRAR_DATOS=0`. Si se llena `USUARIOS_INICIALES_PASSWORD` después del primer arranque, los usuarios se crean con:
+
+```bash
+docker compose up -d app   # recrea el contenedor con el .env nuevo
+docker compose exec -u www-data app php artisan db:seed --class=UsuariosInicialesSeeder --force
+```
+
+Pruebas: `php artisan test`.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

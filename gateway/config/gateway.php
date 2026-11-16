@@ -15,6 +15,9 @@ return [
         'password' => env('ADMIN_PASSWORD'),
     ],
 
+    // Contraseña común de los usuarios iniciales por rol (UsuariosInicialesSeeder)
+    'usuarios_iniciales_password' => env('USUARIOS_INICIALES_PASSWORD'),
+
     // Token compartido con todos los microservicios (G2)
     'service_token' => env('SERVICE_TOKEN'),
 

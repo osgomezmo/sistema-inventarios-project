@@ -10,13 +10,14 @@ class DatabaseSeeder extends Seeder
     use WithoutModelEvents;
 
     /**
-     * Roles, permisos y administrador inicial del gateway.
+     * Roles, permisos, administrador inicial y usuarios iniciales del gateway.
      */
     public function run(): void
     {
         $this->call([
             RolesYPermisosSeeder::class,
             AdminInicialSeeder::class,
+            UsuariosInicialesSeeder::class,
         ]);
     }
 }
