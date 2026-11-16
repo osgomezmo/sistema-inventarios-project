@@ -119,7 +119,8 @@ def listar(cliente, **params):
 
 
 def skus(cuerpo):
-    return [p["sku"].removeprefix(PREFIJO_SKU) for p in cuerpo["data"]]
+    # Solo los productos de la prueba: la base puede tener otros (datos iniciales, D51)
+    return [p["sku"].removeprefix(PREFIJO_SKU) for p in cuerpo["data"] if p["sku"].startswith(PREFIJO_SKU)]
 
 
 def verificar_error(respuesta, status, codigo):
