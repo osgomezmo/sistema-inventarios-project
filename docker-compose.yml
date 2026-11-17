@@ -14,6 +14,7 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq-inventario
+    hostname: rabbitmq-inventario
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-inventario}
@@ -28,9 +29,9 @@ services:
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
+      timeout: 15s
+      retries: 20
+      start_period: 60s
     networks:
       redapi:
         aliases:
@@ -44,6 +45,7 @@ services:
     image: mysql:8.4
     container_name: ms-productos-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${PRODUCTOS_DB_NAME:-ms_productos}
@@ -56,9 +58,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     networks:
       redapi:
         aliases:
@@ -96,6 +98,7 @@ services:
     image: mysql:8.4
     container_name: ms-proveedores-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${PROVEEDORES_DB_NAME:-proveedores}
@@ -108,9 +111,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     networks:
       redapi:
         aliases:
@@ -149,6 +152,7 @@ services:
     image: mysql:8.4
     container_name: ms-inventario-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${INVENTARIO_DB_NAME:-ms_inventario}
@@ -161,9 +165,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     networks:
       redapi:
         aliases:
@@ -238,6 +242,7 @@ services:
     image: mysql:8.4
     container_name: ms-compras-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${COMPRAS_DB_NAME:-mscompras}
@@ -250,9 +255,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     networks:
       redapi:
         aliases:
@@ -329,6 +334,7 @@ services:
     image: mysql:8.4
     container_name: api-gateway-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${GATEWAY_DB_NAME:-gateway}
@@ -341,9 +347,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     networks:
       redapi:
         aliases:

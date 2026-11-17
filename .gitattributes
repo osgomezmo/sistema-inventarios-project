@@ -1,4 +1,7 @@
 # Garantizar saltos de linea LF en scripts shell y archivos de contenedor para Linux/Docker
 *.sh text eol=lf
+*.conf text eol=lf
+*.json text eol=lf
 Dockerfile text eol=lf
 *.conf.template text eol=lf
+
