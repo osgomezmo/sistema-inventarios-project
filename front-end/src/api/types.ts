@@ -1,6 +1,7 @@
 // Tipos de las respuestas de la API pública del gateway (/api/...).
-// Siguen los contratos del capítulo 4 de la entrega 2: nombres de campos,
-// estados y tipos de movimiento tal como viajan en el JSON.
+// Siguen los contratos del capítulo 4 de la entrega 2. Donde un servicio responde
+// con otros nombres (roles del gateway, órdenes de ms-compras, notificaciones),
+// cliente.ts los traduce a estas formas para que las pantallas no cambien.
 
 // ---------- Convenciones comunes (sección 4.1) ----------
 
@@ -27,6 +28,7 @@ export interface ErrorApi {
 
 // ---------- API Gateway: identidad y acceso (tabla 5) ----------
 
+/** Rol en la interfaz. El gateway usa los códigos admin, jefe_bodega, compras y gerente. */
 export type Rol = 'ADMINISTRADOR' | 'JEFE_BODEGA' | 'COMPRAS' | 'GERENTE'
 
 export interface Usuario {
@@ -35,19 +37,20 @@ export interface Usuario {
   email: string
   rol: Rol
   estado: Estado
-  ultimo_acceso: string | null
 }
 
-/** POST /api/auth/login → 200 */
+/** POST /api/auth/login → 200 con el token personal de Sanctum */
 export interface RespuestaLogin {
   token: string
   usuario: Pick<Usuario, 'id' | 'nombre' | 'email' | 'rol'>
 }
 
-/** GET /api/roles → 200 roles con sus permisos */
+/** GET /api/roles → 200 roles con los códigos de sus permisos */
 export interface RolConPermisos {
   id_rol: number
-  nombre: Rol
+  codigo: string
+  rol: Rol
+  nombre: string
   permisos: string[]
 }
 
@@ -58,7 +61,7 @@ export type UnidadMedida = 'UNIDAD' | 'KILO' | 'LITRO'
 export interface Categoria {
   id_categoria: number
   nombre: string
-  descripcion: string
+  descripcion: string | null
   id_categoria_padre: number | null
   estado: Estado
   subcategorias?: Categoria[]
@@ -68,7 +71,7 @@ export interface Producto {
   id_producto: number
   sku: string
   nombre: string
-  descripcion: string
+  descripcion: string | null
   marca: string
   id_categoria: number
   unidad_medida: UnidadMedida
@@ -154,7 +157,7 @@ export interface Traslado {
   motivo: string | null
   id_usuario: number
   fecha: string
-  movimientos: { salida: number; entrada: number }
+  movimientos: { salida: number | null; entrada: number | null }
 }
 
 // ---------- ms-proveedores (tabla 8) ----------
@@ -204,22 +207,27 @@ export interface ItemCantidad {
   cantidad: number
 }
 
+/** Ítem de una recepción o devolución; ms-compras agrega el SKU del renglón. */
+export type ItemMovido = ItemCantidad & { sku?: string }
+
 export interface Recepcion {
   id_recepcion: number
   fecha: string
   id_usuario: number
   observaciones: string
-  items: ItemCantidad[]
+  items: ItemMovido[]
 }
 
 export interface DevolucionProveedor {
   id_devolucion: number
   id_orden: number
+  /** Número de la orden (OC-2026-000001); solo viene en GET /api/devoluciones-proveedor. */
+  numero_orden?: string
   id_proveedor: number
   fecha: string
   id_usuario: number
   motivo: string
-  items: ItemCantidad[]
+  items: ItemMovido[]
 }
 
 export interface OrdenCompra {
@@ -230,7 +238,10 @@ export interface OrdenCompra {
   estado: EstadoOrden
   fecha_creacion: string
   fecha_actualizacion: string
+  fecha_aprobacion: string | null
+  /** Quien creó la orden. */
   id_usuario: number
+  id_usuario_aprobador: number | null
   total: number
   motivo_anulacion: string | null
   items: DetalleOrden[]

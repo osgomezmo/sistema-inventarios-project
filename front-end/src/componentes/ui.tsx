@@ -1,9 +1,9 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, CircleAlert, Inbox, LoaderCircle, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleAlert, Inbox, LoaderCircle, RotateCcw, ServerOff } from 'lucide-react'
 import type { EstadoOrden, MetaPaginacion, Movimiento, Saldo, TipoMovimiento } from '../api/types'
-import { ApiError } from '../api/cliente'
-import { productoPorSku } from '../api/mock/maestros'
-import { cantidad, nombreEstadoOrden, nombreTipo, numero } from '../lib/formato'
+import { ApiError } from '../api/http'
+import { producto } from '../api/maestros'
+import { cantidad, esEntrada, nombreEstadoOrden, nombreTipo, numero } from '../lib/formato'
 
 // ---------- Encabezado de página ----------
 
@@ -49,9 +49,11 @@ export function Vacio({ titulo, children, accion, icono }: { titulo: string; chi
 
 export function ErrorCaja({ error, reintentar }: { error: Error; reintentar?: () => void }) {
   const api = error instanceof ApiError ? error.cuerpo.error : null
+  // Un servicio que aún no está en línea no es un error de la persona: va en tono de alerta.
+  const degradado = api?.codigo === 'REPORTES_NO_DISPONIBLE'
   return (
-    <div className="aviso aviso-error" role="alert">
-      <CircleAlert size={22} aria-hidden />
+    <div className={`aviso ${degradado ? 'aviso-alerta' : 'aviso-error'}`} role={degradado ? 'status' : 'alert'}>
+      {degradado ? <ServerOff size={22} aria-hidden /> : <CircleAlert size={22} aria-hidden />}
       <div>
         <strong>{api ? tituloError(error as ApiError) : 'No se pudo cargar la información'}</strong>
         <p>{api?.mensaje ?? 'Revisa la conexión con el servidor e inténtalo de nuevo.'}</p>
@@ -62,13 +64,19 @@ export function ErrorCaja({ error, reintentar }: { error: Error; reintentar?: ()
 }
 
 function tituloError(e: ApiError): string {
+  switch (e.cuerpo.error.codigo) {
+    case 'REPORTES_NO_DISPONIBLE': return 'Servicio de reportes no disponible'
+    case 'TOKEN_SERVICIO': return 'El gateway no pudo identificarse ante un servicio'
+    case 'SIN_CONEXION': return 'Sin conexión con el servidor'
+  }
   switch (e.status) {
     case 401: return 'Tu sesión terminó'
     case 403: return 'No tienes permiso para esta acción'
     case 404: return 'No se encontró'
     case 409: return 'La operación no se puede hacer así'
     case 422: return 'Revisa los datos'
-    case 503: return 'Un servicio no responde'
+    case 429: return 'Demasiados intentos'
+    case 502: case 503: case 504: return 'Un servicio no responde'
     default: return 'Ocurrió un error'
   }
 }
@@ -161,14 +169,12 @@ export const EtiquetaOrden = ({ estado }: { estado: EstadoOrden }) => <span clas
 export const EtiquetaEstado = ({ estado }: { estado: 'ACTIVO' | 'INACTIVO' }) =>
   estado === 'ACTIVO' ? <span className="tag">Activo</span> : <span className="tag tag-inactivo">Inactivo</span>
 
-export const TipoMov = ({ tipo }: { tipo: TipoMovimiento }) => <>{nombreTipo[tipo]}</>
-
-const entradas: TipoMovimiento[] = ['ENTRADA_COMPRA', 'AJUSTE_POSITIVO', 'TRASLADO_ENTRADA', 'DEVOLUCION_CLIENTE']
+export const TipoMov = ({ tipo }: { tipo: TipoMovimiento }) => <>{nombreTipo[tipo] ?? tipo}</>
 
 /** Cantidad de un movimiento con signo: + entra, − sale; las mermas y daños en rojo. */
 export function CantidadMov({ m }: { m: Pick<Movimiento, 'tipo' | 'cantidad' | 'sku'> }) {
-  const p = productoPorSku.get(m.sku)!
-  const entra = entradas.includes(m.tipo)
+  const p = producto(m.sku)
+  const entra = esEntrada(m.tipo)
   const clase = entra ? 'mas' : m.tipo === 'AJUSTE_NEGATIVO' ? 'merma' : 'menos'
   return <span className={`${clase} cifra`}>{entra ? '+' : '−'}{cantidad(m.cantidad, p.unidad_medida)}</span>
 }

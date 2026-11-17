@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Check, PackageCheck, Plus, Trash2, TriangleAlert, Undo2 } from 'lucide-react'
 import type { EstadoOrden, OrdenCompra } from '../api/types'
 import { ordenesApi, proveedoresApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku, proveedorPorId, proveedores, usuarioPorId } from '../api/mock/maestros'
+import { bodega as bodegaDe, nombreUsuario, producto, productoPorSku, proveedor as proveedorDe, proveedores } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { puedeEditar } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
 import { useBodega } from '../contexto/Bodega'
+import { useMaestros } from '../contexto/Maestros'
 import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, ErrorCelda, EtiquetaOrden, Paginacion, Vacio, erroresCampo } from '../componentes/ui'
 import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 import { cantidad, dinero, fecha, fechaHora, nombreEstadoOrden } from '../lib/formato'
@@ -17,6 +18,7 @@ const ESTADOS: EstadoOrden[] = ['BORRADOR', 'APROBADA', 'RECIBIDA_PARCIAL', 'REC
 
 export function Ordenes() {
   const usuario = useUsuario()
+  useMaestros()
   const [params, setParams] = useSearchParams()
   const estado = (params.get('estado') as EstadoOrden) || undefined
   const page = Number(params.get('page') ?? 1)
@@ -47,8 +49,8 @@ export function Ordenes() {
                   return (
                     <tr key={o.id_orden}>
                       <td><Link className="doc" to={`/ordenes-compra/${o.id_orden}`}>{o.numero}</Link><span className="secundario">{o.items.length} productos</span></td>
-                      <td>{proveedorPorId.get(o.id_proveedor)!.razon_social}</td>
-                      <td>{bodegaPorId.get(o.id_bodega_destino)!.codigo} · {bodegaPorId.get(o.id_bodega_destino)!.nombre}</td>
+                      <td>{proveedorDe(o.id_proveedor).razon_social}</td>
+                      <td>{bodegaDe(o.id_bodega_destino).codigo} · {bodegaDe(o.id_bodega_destino).nombre}</td>
                       <td><EtiquetaOrden estado={o.estado} /></td>
                       <td className="num cifra">{pedido ? Math.round((recibido / pedido) * 100) : 0} %</td>
                       <td className="num cifra">{dinero(o.total)}</td>
@@ -71,6 +73,7 @@ const FLUJO: EstadoOrden[] = ['BORRADOR', 'APROBADA', 'RECIBIDA_PARCIAL', 'RECIB
 export function OrdenDetalle() {
   const { id = '' } = useParams()
   const usuario = useUsuario()
+  useMaestros()
   const avisar = useAvisos()
   const c = useConsulta(() => ordenesApi.obtener(Number(id)), [id])
   const [panel, setPanel] = useState<'recibir' | 'devolver' | 'anular' | null>(null)
@@ -79,7 +82,7 @@ export function OrdenDetalle() {
   if (c.error) return <ErrorCaja error={c.error} reintentar={c.recargar} />
   if (!c.datos) return <div className="panel"><Cargando /></div>
   const o = c.datos
-  const prov = proveedorPorId.get(o.id_proveedor)!
+  const prov = proveedorDe(o.id_proveedor)
   const puedeAprobar = puedeEditar(usuario.rol, 'aprobarOrdenes') && o.estado === 'BORRADOR'
   const puedeRecibir = puedeEditar(usuario.rol, 'recibirMercancia') && ['APROBADA', 'RECIBIDA_PARCIAL'].includes(o.estado)
   const puedeDevolver = puedeEditar(usuario.rol, 'devolucionProveedor') && o.items.some((i) => i.cantidad_recibida > i.cantidad_devuelta)
@@ -97,7 +100,7 @@ export function OrdenDetalle() {
       <Encabezado
         migas={<><Link to="/ordenes-compra">Órdenes de compra</Link><span aria-hidden>/</span><span>{o.numero}</span></>}
         titulo={o.numero}
-        descripcion={<>{prov.razon_social} · destino {bodegaPorId.get(o.id_bodega_destino)!.nombre} · creada el {fecha(o.fecha_creacion)} por {usuarioPorId.get(o.id_usuario)?.nombre}</>}
+        descripcion={<>{prov.razon_social} · destino {bodegaDe(o.id_bodega_destino).nombre} · creada el {fecha(o.fecha_creacion)} por {nombreUsuario(o.id_usuario)}{o.fecha_aprobacion && <> · aprobada el {fecha(o.fecha_aprobacion)}{o.id_usuario_aprobador && <> por {nombreUsuario(o.id_usuario_aprobador)}</>}</>}</>}
         acciones={<EtiquetaOrden estado={o.estado} />}
       />
 
@@ -132,7 +135,7 @@ export function OrdenDetalle() {
             <thead><tr><th>Producto</th><th className="num">Pedido</th><th className="num">Recibido</th><th className="num">Devuelto</th><th className="num">Precio u.</th><th className="num">Subtotal</th></tr></thead>
             <tbody>
               {o.items.map((i) => {
-                const p = productoPorSku.get(i.sku)!
+                const p = producto(i.sku)
                 return (
                   <tr key={i.id_detalle}>
                     <td>{p.nombre}<span className="secundario">{i.sku}</span></td>
@@ -153,8 +156,14 @@ export function OrdenDetalle() {
             <h2>Recepciones</h2>
             {o.recepciones.length === 0 ? <p>Aún no se ha recibido mercancía.</p> : o.recepciones.map((r) => (
               <div key={r.id_recepcion} style={{ padding: '10px 0', borderBottom: '1px solid var(--linea)' }}>
-                <strong>{fechaHora(r.fecha)}</strong> · {usuarioPorId.get(r.id_usuario)?.nombre}
-                <p style={{ color: 'var(--tinta-2)' }}>{r.observaciones}</p>
+                <strong>{fechaHora(r.fecha)}</strong> · {nombreUsuario(r.id_usuario)}
+                {r.items.length > 0 && (
+                  <p>{r.items.map((i) => {
+                    const sku = i.sku ?? o.items.find((d) => d.id_detalle === i.id_detalle)?.sku
+                    return sku ? `${producto(sku).nombre}: ${cantidad(i.cantidad, producto(sku).unidad_medida)}` : `${i.cantidad}`
+                  }).join(' · ')}</p>
+                )}
+                {r.observaciones && <p style={{ color: 'var(--tinta-2)' }}>{r.observaciones}</p>}
               </div>
             ))}
           </section>
@@ -171,7 +180,6 @@ export function OrdenDetalle() {
 }
 
 function FormCantidades({ o, modo, listo, cancelar }: { o: OrdenCompra; modo: 'recibir' | 'devolver'; listo: (t: string) => void; cancelar: () => void }) {
-  const usuario = useUsuario()
   const [cant, setCant] = useState<Record<number, string>>({})
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -182,7 +190,7 @@ function FormCantidades({ o, modo, listo, cancelar }: { o: OrdenCompra; modo: 'r
   const conSaldo = o.items.filter((i) => disponible(i) > 0)
   const v = useValidacion(validar({
     ...Object.fromEntries(conSaldo.map((i) => {
-      const p = productoPorSku.get(i.sku)!
+      const p = producto(i.sku)
       return [`c-${i.id_detalle}`, [reglas.numero(cant[i.id_detalle] ?? '', {
         decimales: decimalesPorUnidad(p.unidad_medida),
         min: 0,
@@ -201,7 +209,7 @@ function FormCantidades({ o, modo, listo, cancelar }: { o: OrdenCompra; modo: 'r
     setError(null)
     const items = o.items.map((i) => ({ id_detalle: i.id_detalle, cantidad: aNumero(cant[i.id_detalle] ?? '') ?? 0 }))
     try {
-      const r = recibir ? await ordenesApi.recibir(o.id_orden, items, texto, usuario.id) : await ordenesApi.devolver(o.id_orden, items, texto, usuario.id)
+      const r = recibir ? await ordenesApi.recibir(o.id_orden, items, texto) : await ordenesApi.devolver(o.id_orden, items, texto.trim())
       listo(recibir ? `Mercancía recibida: ${r.numero} quedó ${nombreEstadoOrden[r.estado].toLowerCase()}` : `Devolución registrada en ${r.numero}`)
     } catch (err) {
       setError(err as Error)
@@ -218,7 +226,7 @@ function FormCantidades({ o, modo, listo, cancelar }: { o: OrdenCompra; modo: 'r
         <thead><tr><th>Producto</th><th className="num">{recibir ? 'Pendiente' : 'Devolvible'}</th><th className="num">{recibir ? 'Cantidad recibida' : 'Cantidad a devolver'}</th></tr></thead>
         <tbody>
           {conSaldo.map((i) => {
-            const p = productoPorSku.get(i.sku)!
+            const p = producto(i.sku)
             const clave = `c-${i.id_detalle}`
             return (
               <tr key={i.id_detalle}>
@@ -279,13 +287,15 @@ export function NuevaOrden() {
   const { idBodega, activas } = useBodega()
   const navegar = useNavigate()
   const avisar = useAvisos()
+  useMaestros()
   const activos = proveedores.filter((p) => p.estado === 'ACTIVO')
-  const [proveedor, setProveedor] = useState(activos[0].id_proveedor)
+  const [proveedor, setProveedor] = useState(activos[0]?.id_proveedor ?? 0)
   const [bodega, setBodega] = useState(idBodega)
   const [items, setItems] = useState<Array<{ sku: string; cantidad: string; precio: string }>>([{ sku: '', cantidad: '', precio: '' }])
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const sumin = useConsulta(() => proveedoresApi.productos(proveedor), [proveedor])
+  // Solo los productos que el proveedor suministra y están activos con él.
+  const sumin = useConsulta(() => (proveedor ? proveedoresApi.productos(proveedor).then((l) => l.filter((s) => s.estado === 'ACTIVO')) : Promise.resolve([])), [proveedor])
   const num = (s: string) => aNumero(s) ?? 0
   const total = items.reduce((a, i) => a + num(i.cantidad) * num(i.precio), 0)
 
@@ -312,7 +322,7 @@ export function NuevaOrden() {
     setEnviando(true)
     setError(null)
     try {
-      const o = await ordenesApi.crear({ id_proveedor: proveedor, id_bodega_destino: bodega, items: items.map((i) => ({ sku: i.sku, cantidad: num(i.cantidad), precio_unitario: num(i.precio) })) }, usuario.id)
+      const o = await ordenesApi.crear({ id_proveedor: proveedor, id_bodega_destino: bodega, items: items.map((i) => ({ sku: i.sku, cantidad: num(i.cantidad), precio_unitario: num(i.precio) })) })
       avisar(`${o.numero} creada en borrador`, { a: `/ordenes-compra/${o.id_orden}`, texto: 'Ver orden' })
       navegar(`/ordenes-compra/${o.id_orden}`)
     } catch (err) {
@@ -323,6 +333,7 @@ export function NuevaOrden() {
   }
 
   if (!puedeEditar(usuario.rol, 'ordenes')) return <Vacio titulo="Tu rol solo puede consultar órdenes de compra" />
+  if (!activos.length) return <Vacio titulo="No hay proveedores activos" accion={<Link className="btn" to="/proveedores">Ir a proveedores</Link>}>Una orden de compra necesita un proveedor activo.</Vacio>
 
   return (
     <>
@@ -341,6 +352,17 @@ export function NuevaOrden() {
             </select>
           </Campo>
         </div>
+        {sumin.error && <ErrorCaja error={sumin.error} reintentar={sumin.recargar} />}
+        {sumin.datos?.length === 0 && (
+          <div className="aviso aviso-alerta" role="status">
+            <TriangleAlert size={20} aria-hidden />
+            <div>
+              <strong>Este proveedor no tiene productos activos asociados</strong>
+              <p>Asígnalos en su ficha antes de crear la orden.</p>
+            </div>
+            {puedeEditar(usuario.rol, 'proveedores') && <Link className="btn btn-sm" to={`/proveedores/${proveedor}`}>Ir a la ficha del proveedor</Link>}
+          </div>
+        )}
         <table className="tabla recepcion-tabla">
           <thead><tr><th>Producto</th><th className="num">Cantidad</th><th className="num">Precio unitario</th><th className="num">Subtotal</th><th><span className="solo-lector">Quitar</span></th></tr></thead>
           <tbody>
@@ -353,7 +375,7 @@ export function NuevaOrden() {
                   <label className="solo-lector" htmlFor={`o-sku-${n}`}>Producto {n + 1}</label>
                   <select id={`o-sku-${n}`} name={k.sku} className="entrada" value={it.sku} {...aria(k.sku)} onChange={(e) => fijar(n, { sku: e.target.value, precio: String(sumin.datos?.find((s) => s.sku === e.target.value)?.precio_compra ?? '') })}>
                     <option value="">Elige un producto del proveedor</option>
-                    {(sumin.datos ?? []).map((s) => <option key={s.sku} value={s.sku}>{s.sku} · {productoPorSku.get(s.sku)!.nombre}</option>)}
+                    {(sumin.datos ?? []).map((s) => <option key={s.sku} value={s.sku}>{s.sku} · {producto(s.sku).nombre}</option>)}
                   </select>
                   <ErrorCelda id={`${k.sku}-error`} error={campos[k.sku]} />
                 </td>

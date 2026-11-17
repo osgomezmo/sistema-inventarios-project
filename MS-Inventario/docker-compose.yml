@@ -3,6 +3,7 @@ services:
     build: .
     image: ms-inventario:dev
     container_name: ms-inventario-app
+    restart: unless-stopped
     env_file: .env
     environment:
       # Dentro de la red de Compose, MySQL se alcanza por el nombre del servicio
@@ -51,6 +52,7 @@ services:
   mysql:
     image: mysql:8.4
     container_name: ms-inventario-mysql
+    restart: unless-stopped
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${DB_NAME:?falta DB_NAME en .env}

@@ -3,7 +3,11 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Saldo } from '../api/types'
-import { categoriaRaiz, productoPorSku } from '../api/mock/maestros'
+import { categoriaRaiz, producto } from '../api/maestros'
+
+/** Categoría que agrupa un SKU en el rack: la raíz de su categoría en el catálogo. */
+export type CategoriaDe = (sku: string) => string
+const categoriaDelCatalogo: CategoriaDe = (sku) => categoriaRaiz(producto(sku).id_categoria).nombre
 
 export const MEDIDAS = {
   posicion: 1.35,      // ancho de una posición de estiba
@@ -17,6 +21,15 @@ export const MEDIDAS = {
 }
 
 export const ANCHO_MODULO = MEDIDAS.posicion * 2
+
+/** Código para la pintura del piso: BOD-PRINCIPAL → PRINCIPAL; los cortos (B2) quedan igual. */
+export const codigoCorto = (codigo: string) => codigo.replace(/^BOD[-_]?/i, '') || codigo
+
+/** Rótulo de una posición: B2-N1-P03 con códigos cortos; N1-P03 si el código no cabe en la placa. */
+const codigoPosicion = (codigoBodega: string, nivel: number, indice: number) => {
+  const posicion = `N${nivel + 1}-P${String(indice + 1).padStart(2, '0')}`
+  return codigoBodega.length <= 4 ? `${codigoBodega}-${posicion}` : posicion
+}
 
 export interface Posicion {
   saldo: Saldo
@@ -53,10 +66,10 @@ const xPosicion = (indice: number) => {
 }
 
 /** Reparte los productos de la bodega en niveles: cada categoría queda contigua en un nivel. */
-export function distribuir(saldos: Saldo[], codigoBodega: string): DistribucionRack {
+export function distribuir(saldos: Saldo[], codigoBodega: string, categoriaDe: CategoriaDe = categoriaDelCatalogo): DistribucionRack {
   const porCategoria = new Map<string, Saldo[]>()
   for (const s of [...saldos].sort((a, b) => a.sku.localeCompare(b.sku))) {
-    const c = categoriaRaiz(productoPorSku.get(s.sku)!.id_categoria).nombre
+    const c = categoriaDe(s.sku)
     porCategoria.set(c, [...(porCategoria.get(c) ?? []), s])
   }
   const grupos = [...porCategoria.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
@@ -85,7 +98,7 @@ export function distribuir(saldos: Saldo[], codigoBodega: string): DistribucionR
           categoria,
           nivel,
           indice,
-          codigo: `${codigoBodega}-N${nivel + 1}-P${String(indice + 1).padStart(2, '0')}`,
+          codigo: codigoPosicion(codigoBodega, nivel, indice),
           x: xPosicion(indice),
           y: nivel * MEDIDAS.nivel,
           cajas: cajasPorSaldo(saldo.cantidad, saldo.stock_minimo),

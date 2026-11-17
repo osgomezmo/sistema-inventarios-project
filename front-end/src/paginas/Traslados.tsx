@@ -1,21 +1,24 @@
-import { Fragment, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Fragment, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ArrowRight, Plus } from 'lucide-react'
-import { trasladosApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku, productos, usuarioPorId } from '../api/mock/maestros'
-import { saldosActuales } from '../api/mock/simulacion'
+import { stockApi, trasladosApi } from '../api/cliente'
+import { bodega as bodegaDe, nombreUsuario, producto, productoPorSku, productos } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { puedeEditar } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
 import { useBodega } from '../contexto/Bodega'
-import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, Vacio, erroresCampo } from '../componentes/ui'
+import { useMaestros } from '../contexto/Maestros'
+import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, Paginacion, Vacio, erroresCampo } from '../componentes/ui'
 import { cantidad, fechaHora, numeroMovimiento, numeroTraslado, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 
 export function Traslados() {
   const usuario = useUsuario()
-  const c = useConsulta(() => trasladosApi.listar(), [])
+  useMaestros()
+  const [params, setParams] = useSearchParams()
+  const page = Number(params.get('page') ?? 1)
+  const c = useConsulta(() => trasladosApi.listar({ page }), [page])
   return (
     <>
       <Encabezado
@@ -27,26 +30,29 @@ export function Traslados() {
       <div className="tabla-envoltura">
         {!c.datos && !c.error && <Cargando />}
         {c.datos && (c.datos.data.length === 0 ? <Vacio titulo="Aún no hay traslados" /> : (
-          <table className="tabla">
-            <thead><tr><th>Traslado</th><th>Fecha</th><th>Producto</th><th>Ruta</th><th className="num">Cantidad</th><th>Movimientos</th><th>Motivo</th><th>Usuario</th></tr></thead>
-            <tbody>
-              {c.datos.data.map((t) => {
-                const p = productoPorSku.get(t.sku)!
-                return (
-                  <tr key={t.id_traslado}>
-                    <td className="doc">{numeroTraslado(t.id_traslado)}</td>
-                    <td className="cifra">{fechaHora(t.fecha)}</td>
-                    <td>{p.nombre}<span className="secundario">{t.sku}</span></td>
-                    <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>{bodegaPorId.get(t.id_bodega_origen)!.codigo}<ArrowRight size={16} aria-label="hacia" />{bodegaPorId.get(t.id_bodega_destino)!.codigo}</span></td>
-                    <td className="num cifra">{cantidad(t.cantidad, p.unidad_medida)}</td>
-                    <td>{numeroMovimiento(t.movimientos.salida)}<span className="secundario">{numeroMovimiento(t.movimientos.entrada)}</span></td>
-                    <td>{t.motivo ?? '—'}</td>
-                    <td>{usuarioPorId.get(t.id_usuario)?.nombre}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <>
+            <table className="tabla">
+              <thead><tr><th>Traslado</th><th>Fecha</th><th>Producto</th><th>Ruta</th><th className="num">Cantidad</th><th>Movimientos</th><th>Motivo</th><th>Usuario</th></tr></thead>
+              <tbody>
+                {c.datos.data.map((t) => {
+                  const p = producto(t.sku)
+                  return (
+                    <tr key={t.id_traslado}>
+                      <td className="doc">{numeroTraslado(t.id_traslado)}</td>
+                      <td className="cifra">{fechaHora(t.fecha)}</td>
+                      <td>{p.nombre}<span className="secundario">{t.sku}</span></td>
+                      <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>{bodegaDe(t.id_bodega_origen).codigo}<ArrowRight size={16} aria-label="hacia" />{bodegaDe(t.id_bodega_destino).codigo}</span></td>
+                      <td className="num cifra">{cantidad(t.cantidad, p.unidad_medida)}</td>
+                      <td>{t.movimientos.salida ? numeroMovimiento(t.movimientos.salida) : '—'}<span className="secundario">{t.movimientos.entrada ? numeroMovimiento(t.movimientos.entrada) : '—'}</span></td>
+                      <td>{t.motivo ?? '—'}</td>
+                      <td>{nombreUsuario(t.id_usuario)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <Paginacion meta={c.datos.meta} cambiar={(n) => setParams({ page: String(n) })} />
+          </>
         ))}
       </div>
     </>
@@ -60,13 +66,15 @@ export function NuevoTraslado() {
   const avisar = useAvisos()
   const [sku, setSku] = useState('')
   const [origen, setOrigen] = useState(idBodega)
-  const [destino, setDestino] = useState(activas.find((b) => b.id_bodega !== idBodega)!.id_bodega)
+  const [destino, setDestino] = useState(activas.find((b) => b.id_bodega !== idBodega)?.id_bodega ?? idBodega)
   const [cant, setCant] = useState('')
   const [motivo, setMotivo] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const p = productoPorSku.get(sku)
-  const saldos = useMemo(() => saldosActuales().filter((s) => s.sku === sku), [sku])
+  // Saldos del producto en todas las bodegas, para el tope de la cantidad y el panel lateral.
+  const consultaSaldos = useConsulta(() => (sku ? stockApi.todos({ sku }) : Promise.resolve([])), [sku])
+  const saldos = consultaSaldos.datos ?? []
   const disponible = saldos.find((s) => s.id_bodega === origen)?.cantidad ?? 0
 
   const v = useValidacion(validar({
@@ -77,7 +85,7 @@ export function NuevoTraslado() {
       mensajeVacio: 'Escribe la cantidad a trasladar.',
       decimales: p ? decimalesPorUnidad(p.unidad_medida) : 3,
       mayorQueCero: true,
-      max: p ? disponible : undefined,
+      max: p && consultaSaldos.datos ? disponible : undefined,
       mensajeMax: p && `En la bodega de origen solo hay ${cantidad(disponible, p.unidad_medida)}.`,
     })],
     motivo: [reglas.largo(motivo, 0, 200)],
@@ -90,8 +98,8 @@ export function NuevoTraslado() {
     setEnviando(true)
     setError(null)
     try {
-      const t = await trasladosApi.crear({ sku, id_bodega_origen: origen, id_bodega_destino: destino, cantidad: aNumero(cant) ?? 0, motivo: motivo.trim() }, usuario.id)
-      avisar(`${numeroTraslado(t.id_traslado)} registrado: ${cantidad(t.cantidad, p!.unidad_medida)} de ${bodegaPorId.get(origen)!.codigo} a ${bodegaPorId.get(destino)!.codigo}`)
+      const t = await trasladosApi.crear({ sku, id_bodega_origen: origen, id_bodega_destino: destino, cantidad: aNumero(cant) ?? 0, motivo })
+      avisar(`${numeroTraslado(t.id_traslado)} registrado: ${cantidad(t.cantidad, producto(t.sku).unidad_medida)} de ${bodegaDe(origen).codigo} a ${bodegaDe(destino).codigo}`)
       navegar('/traslados')
     } catch (err) {
       setError(err as Error)
@@ -139,7 +147,7 @@ export function NuevoTraslado() {
         </form>
         <aside className="panel">
           <h2>Saldo por bodega</h2>
-          {!p ? <p>Elige un producto para ver dónde hay saldo.</p> : (
+          {!p ? <p>Elige un producto para ver dónde hay saldo.</p> : consultaSaldos.error ? <ErrorCaja error={consultaSaldos.error} reintentar={consultaSaldos.recargar} /> : consultaSaldos.cargando ? <Cargando filas={4} texto="Consultando saldos" /> : (
             <dl className="datos">
               {activas.map((b) => (
                 <Fragment key={b.id_bodega}>

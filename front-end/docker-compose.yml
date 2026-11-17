@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    image: front-end-inventarios:dev
+    container_name: front-end-app
+    restart: unless-stopped
+    environment:
+      PORT: "80"
+      GATEWAY_URL: http://api-gateway
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      default:
+      redapi:
+        aliases:
+          - front-end
+
+networks:
+  redapi:
+    external: true

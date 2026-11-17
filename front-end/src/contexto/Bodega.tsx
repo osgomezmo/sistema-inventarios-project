@@ -1,10 +1,15 @@
 // Bodega activa: el contexto en el que trabaja la persona (se elige en la barra superior).
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import { bodegas } from '../api/mock/maestros'
+// Las bodegas salen de los maestros que se leen del gateway al iniciar sesión.
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { bodegas } from '../api/maestros'
 import { guardar, leer } from '../lib/almacen'
 import type { Bodega } from '../api/types'
+import { useMaestros } from './Maestros'
 
 const CLAVE = 'estiba.bodega'
+
+/** Sin bodegas activas (sistema recién instalado) las pantallas muestran listas vacías. */
+const SIN_BODEGA: Bodega = { id_bodega: 0, codigo: '—', nombre: 'Sin bodegas activas', direccion: '', estado: 'INACTIVO' }
 
 interface ContextoBodega {
   idBodega: number
@@ -12,26 +17,23 @@ interface ContextoBodega {
   cambiar: (id: number) => void
   activas: Bodega[]
   /** Vuelve a leer las bodegas después de crear o inactivar una. */
-  refrescar: () => void
+  refrescar: () => Promise<void>
 }
 
 const Contexto = createContext<ContextoBodega | null>(null)
 
 export function ProveedorBodega({ children }: { children: ReactNode }) {
-  const [version, setVersion] = useState(0)
+  const { version, recargar } = useMaestros()
   const activas = useMemo(() => bodegas.filter((b) => b.estado === 'ACTIVO'), [version]) // eslint-disable-line react-hooks/exhaustive-deps
-  const [idBodega, setId] = useState<number>(() => {
-    const guardada = leer<number>(CLAVE)
-    return bodegas.some((b) => b.id_bodega === guardada && b.estado === 'ACTIVO') ? (guardada as number) : 2
-  })
-  const refrescar = useCallback(() => setVersion((v) => v + 1), [])
+  const [elegida, setElegida] = useState<number | null>(() => leer<number>(CLAVE))
+  const bodega = activas.find((b) => b.id_bodega === elegida) ?? activas[0] ?? SIN_BODEGA
   const valor = useMemo<ContextoBodega>(() => ({
-    idBodega,
-    bodega: activas.find((b) => b.id_bodega === idBodega) ?? activas[0],
-    cambiar: (id: number) => { guardar(CLAVE, id); setId(id) },
+    idBodega: bodega.id_bodega,
+    bodega,
+    cambiar: (id: number) => { guardar(CLAVE, id); setElegida(id) },
     activas,
-    refrescar,
-  }), [idBodega, activas, refrescar])
+    refrescar: recargar,
+  }), [bodega, activas, recargar])
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
 }
 

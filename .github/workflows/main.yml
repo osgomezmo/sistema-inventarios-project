@@ -1,0 +1,26 @@
+name: Deploy Microservices to sw2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Desplegar cambios en VM Debian
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Conectar por SSH a sw2 y relanzar contenedores
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            cd ~/${{ github.event.repository.name }}
+            git pull origin main
+            docker compose up -d --build
+            docker image prune -f
+          

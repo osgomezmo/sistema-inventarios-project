@@ -1,6 +1,7 @@
 const storage = require('../repositories/storage');
 const notificador = require('../services/notificador');
 const { AppError } = require('../utils/errors');
+const { ROLES_VALIDOS } = require('../utils/roles');
 
 /**
  * Registra el token FCM de un dispositivo y lo suscribe al tema de su rol.
@@ -16,7 +17,7 @@ async function registrarDispositivo(req, res, next) {
       detalles.id_usuario = ['El encabezado de usuario (X-User-Id) es requerido'];
     }
 
-    if (!usuario || !usuario.rol) {
+    if (!usuario || !usuario.rol || !ROLES_VALIDOS.includes(usuario.rol)) {
       detalles.rol = ['El encabezado de rol de usuario (X-User-Role) es requerido'];
     }
 

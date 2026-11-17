@@ -22,7 +22,7 @@ TOKEN = "token-de-prueba"
 CABECERAS = {"Authorization": f"Bearer {TOKEN}"}
 CAMPOS = {
     "id_producto", "sku", "nombre", "descripcion", "marca", "id_categoria",
-    "unidad_medida", "precio_venta", "stock_minimo", "estado",
+    "unidad_medida", "precio_venta", "stock_minimo", "estado", "creado_en",
 }
 CAMPOS_SKU = {"sku", "nombre", "estado", "unidad_medida", "stock_minimo", "id_categoria"}
 CONFIG = cargar_configuracion()

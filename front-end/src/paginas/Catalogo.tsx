@@ -4,11 +4,12 @@ import { AltaBodega, AltaCategoria, AltaProducto } from './Altas'
 import { aNumero, reglas } from '../lib/validacion'
 import { Boxes, Plus } from 'lucide-react'
 import { ApiError, bodegasApi, categoriasApi, productosApi, stockApi } from '../api/cliente'
-import { categoriaPorId, categoriaRaiz, productos as todosProductos } from '../api/mock/maestros'
+import { categoriaRaiz, nombreCategoria, productos as todosProductos } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { puedeEditar } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
 import { useBodega } from '../contexto/Bodega'
+import { useMaestros } from '../contexto/Maestros'
 import { Campo, Cargando, Encabezado, ErrorCaja, EtiquetaEstado, Paginacion, Vacio } from '../componentes/ui'
 import { cantidad, dinero, dineroCorto, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
@@ -16,6 +17,7 @@ import { useConsulta } from '../lib/useConsulta'
 export function Productos() {
   const usuario = useUsuario()
   const avisar = useAvisos()
+  const { recargar } = useMaestros()
   const [params, setParams] = useSearchParams()
   const textoMin = params.get('min') ?? ''
   const textoMax = params.get('max') ?? ''
@@ -43,6 +45,7 @@ export function Productos() {
       const p = await productosApi.cambiarEstado(id, estado)
       avisar(`${p.sku} ${estado === 'ACTIVO' ? 'activado' : 'inactivado'}`)
       c.recargar()
+      recargar().catch(() => {})
     } catch (e) {
       if (e instanceof ApiError) avisar(e.message)
     }
@@ -55,7 +58,7 @@ export function Productos() {
         descripcion="Un producto con movimientos no se elimina: se inactiva y conserva su historia."
         acciones={admin && <button type="button" className="btn btn-pri" aria-expanded={alta} onClick={() => setAlta(!alta)}><Plus size={18} aria-hidden />Nuevo producto</button>}
       />
-      {alta && <AltaProducto listo={(t) => { avisar(t); setAlta(false); c.recargar() }} cancelar={() => setAlta(false)} />}
+      {alta && <AltaProducto listo={(t) => { avisar(t); setAlta(false); c.recargar(); recargar().catch(() => {}) }} cancelar={() => setAlta(false)} />}
       <div className="filtros">
         <div className="campo ancho"><label htmlFor="pr-q">Buscar</label><input id="pr-q" type="search" placeholder="SKU o nombre" maxLength={60} value={f.q} onChange={(e) => cambiar('q', e.target.value)} /></div>
         <div className="campo">
@@ -89,7 +92,7 @@ export function Productos() {
                 {c.datos.data.map((p) => (
                   <tr key={p.id_producto}>
                     <td><Link to={`/stock/${p.sku}`}><strong>{p.nombre}</strong></Link><span className="secundario">{p.sku} · {p.marca}</span></td>
-                    <td>{categoriaRaiz(p.id_categoria).nombre}<span className="secundario">{categoriaPorId.get(p.id_categoria)!.nombre}</span></td>
+                    <td>{categoriaRaiz(p.id_categoria).nombre}<span className="secundario">{nombreCategoria(p.id_categoria)}</span></td>
                     <td>{unidad(p.unidad_medida)}</td>
                     <td className="num cifra">{dinero(p.precio_venta)}</td>
                     <td className="num cifra">{cantidad(p.stock_minimo, p.unidad_medida)}</td>
@@ -112,6 +115,7 @@ export function Productos() {
 export function Categorias() {
   const usuario = useUsuario()
   const avisar = useAvisos()
+  const { recargar } = useMaestros()
   const [alta, setAlta] = useState(false)
   const c = useConsulta(() => categoriasApi.listar(), [])
   const cuenta = (id: number) => todosProductos.filter((p) => p.id_categoria === id || categoriaRaiz(p.id_categoria).id_categoria === id).length
@@ -122,10 +126,11 @@ export function Categorias() {
         descripcion="No se puede inactivar una categoría que tenga productos activos."
         acciones={puedeEditar(usuario.rol, 'catalogo') && <button type="button" className="btn btn-pri" aria-expanded={alta} onClick={() => setAlta(!alta)}><Plus size={18} aria-hidden />Nueva categoría</button>}
       />
-      {alta && <AltaCategoria listo={(t) => { avisar(t); setAlta(false); c.recargar() }} cancelar={() => setAlta(false)} />}
+      {alta && <AltaCategoria listo={(t) => { avisar(t); setAlta(false); c.recargar(); recargar().catch(() => {}) }} cancelar={() => setAlta(false)} />}
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       <div className="panel" style={{ padding: 0 }}>
         {!c.datos && !c.error && <Cargando />}
+        {c.datos && c.datos.length === 0 && <Vacio titulo="Aún no hay categorías">Crea una categoría principal y luego sus subcategorías.</Vacio>}
         {c.datos && (
           <ul className="arbol">
             {c.datos.map((cat) => (
@@ -151,7 +156,7 @@ export function Bodegas() {
   const navegar = useNavigate()
   const avisar = useAvisos()
   const [alta, setAlta] = useState(false)
-  const c = useConsulta(() => Promise.all([bodegasApi.listar(), stockApi.listar({ per_page: 100 })]), [])
+  const c = useConsulta(() => Promise.all([bodegasApi.listar(), stockApi.todos()]), [])
   return (
     <>
       <Encabezado
@@ -159,13 +164,13 @@ export function Bodegas() {
         descripcion="Cada bodega tiene su propio rack; todas se dibujan a la misma escala."
         acciones={puedeEditar(usuario.rol, 'bodegas') && <button type="button" className="btn btn-pri" aria-expanded={alta} onClick={() => setAlta(!alta)}><Plus size={18} aria-hidden />Nueva bodega</button>}
       />
-      {alta && <AltaBodega listo={(t) => { avisar(t); setAlta(false); refrescar(); c.recargar() }} cancelar={() => setAlta(false)} />}
+      {alta && <AltaBodega listo={(t) => { avisar(t); setAlta(false); refrescar().catch(() => {}); c.recargar() }} cancelar={() => setAlta(false)} />}
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       {!c.datos && !c.error && <div className="panel"><Cargando /></div>}
       {c.datos && (
         <div className="bodegas-rejilla">
           {c.datos[0].map((b) => {
-            const saldos = c.datos![1].data.filter((s) => s.id_bodega === b.id_bodega)
+            const saldos = c.datos![1].filter((s) => s.id_bodega === b.id_bodega)
             return (
               <article key={b.id_bodega} className="panel bodega-ficha">
                 <h2>{b.nombre}<span>{b.codigo}</span></h2>
