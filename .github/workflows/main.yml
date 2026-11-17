@@ -1,0 +1,37 @@
+name: Deploy Microservices to sw2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Desplegar cambios en VM Debian
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Autenticar con Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Obtener IP actual de sw2
+        id: gcp
+        run: |
+          gcloud compute instances start sw2 --zone=us-east1-c --project=api-sics
+          IP=$(gcloud compute instances describe sw2 --zone=us-east1-c --project=api-sics --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+
+      - name: Conectar por SSH a sw2 y relanzar contenedores
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ steps.gcp.outputs.ip }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            cd ~/${{ github.event.repository.name }}
+            git pull origin main
+            docker compose up -d --build
+            docker image prune -f
