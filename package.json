@@ -1,0 +1,14 @@
+{
+  "name": "sistema-inventarios-microservicios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ejecutor raiz de pruebas unitarias para los microservicios del Sistema de Gestion de Inventarios",
+  "scripts": {
+    "test": "python test_microservicios.py",
+    "test:productos": "python -m pytest MS-Productos/tests/test_base.py MS-Productos/tests/test_db.py MS-Productos/tests/test_json.py MS-Productos/tests/test_utilidades.py MS-Productos/tests/test_endpoints_mock.py -v",
+    "test:inventario": "python -m pytest MS-Inventario/tests/test_base.py MS-Inventario/tests/test_cliente_productos.py MS-Inventario/tests/test_consumidor.py MS-Inventario/tests/test_db.py MS-Inventario/tests/test_eventos.py MS-Inventario/tests/test_json.py MS-Inventario/tests/test_motor_movimientos.py MS-Inventario/tests/test_reintento_db.py MS-Inventario/tests/test_utilidades.py MS-Inventario/tests/test_endpoints_mock.py -v",
+    "test:proveedores": "npm --prefix MS-Proveedores test",
+    "test:compras": "npm --prefix MS-Compras test",
+    "test:notificaciones": "npm --prefix MS-Notificaciones test"
+  }
+}

@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    image: ms-notificaciones:dev
+    container_name: ms-notificaciones-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "5006"
+    ports:
+      - "127.0.0.1:5006:5006"
+    volumes:
+      - ms_notificaciones_data:/app/.data
+    networks:
+      default:
+      redapi:
+        aliases:
+          - ms-notificaciones
+
+volumes:
+  ms_notificaciones_data:
+
+networks:
+  redapi:
+    external: true

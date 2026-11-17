@@ -1,0 +1,49 @@
+services:
+  app:
+    build: .
+    image: ms-compras:dev
+    container_name: ms-compras-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      PROVEEDORES_URL: http://ms-proveedores:3001
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq-inventario:5672/
+    ports:
+      - "127.0.0.1:5004:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      default:
+      redapi:
+        aliases:
+          - ms-compras
+
+  mysql:
+    image: mysql:8.4
+    container_name: ms-compras-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${DB_NAME:?falta DB_NAME en .env}
+      MYSQL_USER: ${DB_USER:?falta DB_USER en .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:33064:3306"
+    volumes:
+      - ms_compras_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  ms_compras_mysql:
+
+networks:
+  redapi:
+    external: true

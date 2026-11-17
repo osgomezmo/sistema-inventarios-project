@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "NODE_ENV=test jest --runInBand"
+    "test": "jest --runInBand"
   },
   "keywords": [
     "microservicios",

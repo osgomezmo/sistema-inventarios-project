@@ -1,0 +1,438 @@
+# ==============================================================================
+# Orquestacion General — Sistema de Gestion de Inventarios
+# ==============================================================================
+# Levanta todos los microservicios implementados, sus bases de datos MySQL 8.4
+# independientes, el broker RabbitMQ 4, el API Gateway (Laravel) y el Frontend
+# (React + Nginx) bajo la red compartida `redapi`.
+# Todos los servicios incluyen `restart: unless-stopped` para que se reinicien
+# automaticamente al encender la maquina virtual (VM) donde se aloja el sistema.
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Infraestructura de Mensajeria (RabbitMQ 4)
+  # ----------------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq-inventario
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-inventario}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-inventario_secret}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      redapi:
+        aliases:
+          - rabbitmq-inventario
+          - rabbitmq
+
+  # ----------------------------------------------------------------------------
+  # 2. MS-Productos (Flask + MySQL 8.4 propio)
+  # ----------------------------------------------------------------------------
+  productos-mysql:
+    image: mysql:8.4
+    container_name: ms-productos-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${PRODUCTOS_DB_NAME:-ms_productos}
+      MYSQL_USER: ${PRODUCTOS_DB_USER:-ms_productos}
+      MYSQL_PASSWORD: ${PRODUCTOS_DB_PASSWORD:-productos_secret_2026}
+    ports:
+      - "127.0.0.1:33061:3306"
+    volumes:
+      - ms_productos_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      redapi:
+        aliases:
+          - productos-mysql
+
+  ms-productos:
+    build:
+      context: ./MS-Productos
+      dockerfile: Dockerfile
+    image: ms-productos:dev
+    container_name: ms-productos-app
+    restart: unless-stopped
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: productos-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${PRODUCTOS_DB_NAME:-ms_productos}
+      DB_USER: ${PRODUCTOS_DB_USER:-ms_productos}
+      DB_PASSWORD: ${PRODUCTOS_DB_PASSWORD:-productos_secret_2026}
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
+    ports:
+      - "127.0.0.1:5001:5000"
+    depends_on:
+      productos-mysql:
+        condition: service_healthy
+    networks:
+      redapi:
+        aliases:
+          - ms-productos
+
+  # ----------------------------------------------------------------------------
+  # 3. MS-Proveedores (Express + MySQL 8.4 propio)
+  # ----------------------------------------------------------------------------
+  proveedores-mysql:
+    image: mysql:8.4
+    container_name: ms-proveedores-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${PROVEEDORES_DB_NAME:-proveedores}
+      MYSQL_USER: ${PROVEEDORES_DB_USER:-proveedores_user}
+      MYSQL_PASSWORD: ${PROVEEDORES_DB_PASSWORD:-proveedores_secret_2026}
+    ports:
+      - "127.0.0.1:33063:3306"
+    volumes:
+      - ms_proveedores_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      redapi:
+        aliases:
+          - proveedores-mysql
+
+  ms-proveedores:
+    build:
+      context: ./MS-Proveedores
+      dockerfile: Dockerfile
+    image: ms-proveedores:dev
+    container_name: ms-proveedores-app
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: proveedores-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${PROVEEDORES_DB_NAME:-proveedores}
+      DB_USER: ${PROVEEDORES_DB_USER:-proveedores_user}
+      DB_PASSWORD: ${PROVEEDORES_DB_PASSWORD:-proveedores_secret_2026}
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
+    ports:
+      - "127.0.0.1:5003:3001"
+    depends_on:
+      proveedores-mysql:
+        condition: service_healthy
+    networks:
+      redapi:
+        aliases:
+          - ms-proveedores
+
+  # ----------------------------------------------------------------------------
+  # 4. MS-Inventario + Consumidor RabbitMQ (Flask + MySQL 8.4 propio)
+  # ----------------------------------------------------------------------------
+  inventario-mysql:
+    image: mysql:8.4
+    container_name: ms-inventario-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${INVENTARIO_DB_NAME:-ms_inventario}
+      MYSQL_USER: ${INVENTARIO_DB_USER:-ms_inventario}
+      MYSQL_PASSWORD: ${INVENTARIO_DB_PASSWORD:-inventario_secret_2026}
+    ports:
+      - "127.0.0.1:33062:3306"
+    volumes:
+      - ms_inventario_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      redapi:
+        aliases:
+          - inventario-mysql
+
+  ms-inventario:
+    build:
+      context: ./MS-Inventario
+      dockerfile: Dockerfile
+    image: ms-inventario:dev
+    container_name: ms-inventario-app
+    restart: unless-stopped
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: inventario-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${INVENTARIO_DB_NAME:-ms_inventario}
+      DB_USER: ${INVENTARIO_DB_USER:-ms_inventario}
+      DB_PASSWORD: ${INVENTARIO_DB_PASSWORD:-inventario_secret_2026}
+      PRODUCTOS_URL: http://ms-productos:5000
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-inventario}:${RABBITMQ_PASSWORD:-inventario_secret}@rabbitmq-inventario:5672/%2F
+      RABBITMQ_HOST: rabbitmq-inventario
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
+    ports:
+      - "127.0.0.1:5002:5000"
+    depends_on:
+      inventario-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ms-productos:
+        condition: service_started
+    networks:
+      redapi:
+        aliases:
+          - ms-inventario
+
+  ms-inventario-consumidor:
+    build:
+      context: ./MS-Inventario
+      dockerfile: Dockerfile
+    image: ms-inventario:dev
+    container_name: ms-inventario-consumidor
+    restart: unless-stopped
+    command: ["python", "-m", "app.consumidor"]
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: inventario-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${INVENTARIO_DB_NAME:-ms_inventario}
+      DB_USER: ${INVENTARIO_DB_USER:-ms_inventario}
+      DB_PASSWORD: ${INVENTARIO_DB_PASSWORD:-inventario_secret_2026}
+      MIGRAR_BASE: "0"
+      SEMBRAR_DATOS: "0"
+      PRODUCTOS_URL: http://ms-productos:5000
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-inventario}:${RABBITMQ_PASSWORD:-inventario_secret}@rabbitmq-inventario:5672/%2F
+      RABBITMQ_HOST: rabbitmq-inventario
+    depends_on:
+      inventario-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ms-inventario:
+        condition: service_started
+    networks:
+      redapi:
+
+  # ----------------------------------------------------------------------------
+  # 5. MS-Compras (Flask + MySQL 8.4 propio)
+  # ----------------------------------------------------------------------------
+  compras-mysql:
+    image: mysql:8.4
+    container_name: ms-compras-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${COMPRAS_DB_NAME:-mscompras}
+      MYSQL_USER: ${COMPRAS_DB_USER:-compras_user}
+      MYSQL_PASSWORD: ${COMPRAS_DB_PASSWORD:-compras_secret_2026}
+    ports:
+      - "127.0.0.1:33064:3306"
+    volumes:
+      - ms_compras_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      redapi:
+        aliases:
+          - compras-mysql
+
+  ms-compras:
+    build:
+      context: ./MS-Compras
+      dockerfile: Dockerfile
+    image: ms-compras:dev
+    container_name: ms-compras-app
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: compras-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${COMPRAS_DB_NAME:-mscompras}
+      DB_USER: ${COMPRAS_DB_USER:-compras_user}
+      DB_PASSWORD: ${COMPRAS_DB_PASSWORD:-compras_secret_2026}
+      PROVEEDORES_URL: http://ms-proveedores:3001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-inventario}:${RABBITMQ_PASSWORD:-inventario_secret}@rabbitmq-inventario:5672/%2F
+      RABBITMQ_EXCHANGE: inventario.eventos
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
+    ports:
+      - "127.0.0.1:5004:5000"
+    depends_on:
+      compras-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ms-proveedores:
+        condition: service_started
+    networks:
+      redapi:
+        aliases:
+          - ms-compras
+
+  # ----------------------------------------------------------------------------
+  # 6. MS-Notificaciones (Express + Almacenamiento Local/Firebase, sin MySQL)
+  # ----------------------------------------------------------------------------
+  ms-notificaciones:
+    build:
+      context: ./MS-Notificaciones
+      dockerfile: Dockerfile
+    image: ms-notificaciones:dev
+    container_name: ms-notificaciones-app
+    restart: unless-stopped
+    environment:
+      PORT: "5006"
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-inventario}:${RABBITMQ_PASSWORD:-inventario_secret}@rabbitmq-inventario:5672/%2F
+      STORAGE_DRIVER: ${NOTIFICACIONES_STORAGE_DRIVER:-local}
+      PUSH_DRIVER: ${NOTIFICACIONES_PUSH_DRIVER:-console}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+    ports:
+      - "127.0.0.1:5006:5006"
+    volumes:
+      - ms_notificaciones_data:/app/.data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      redapi:
+        aliases:
+          - ms-notificaciones
+
+  # ----------------------------------------------------------------------------
+  # 7. API Gateway (Laravel 13 + Apache + MySQL 8.4 propio)
+  # ----------------------------------------------------------------------------
+  gateway-mysql:
+    image: mysql:8.4
+    container_name: api-gateway-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${GATEWAY_DB_NAME:-gateway}
+      MYSQL_USER: ${GATEWAY_DB_USER:-gateway}
+      MYSQL_PASSWORD: ${GATEWAY_DB_PASSWORD:-gateway_secret_2026}
+    ports:
+      - "127.0.0.1:33066:3306"
+    volumes:
+      - gateway_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      redapi:
+        aliases:
+          - gateway-mysql
+
+  api-gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    image: api-gateway:dev
+    container_name: api-gateway-app
+    restart: unless-stopped
+    environment:
+      APP_NAME: "Sistema de Inventarios"
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${GATEWAY_APP_KEY:-base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
+      APP_URL: ${APP_URL:-http://localhost}
+      DB_CONNECTION: mysql
+      DB_HOST: gateway-mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${GATEWAY_DB_NAME:-gateway}
+      DB_USERNAME: ${GATEWAY_DB_USER:-gateway}
+      DB_PASSWORD: ${GATEWAY_DB_PASSWORD:-gateway_secret_2026}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      PRODUCTOS_URL: http://ms-productos:5000
+      INVENTARIO_URL: http://ms-inventario:5000
+      PROVEEDORES_URL: http://ms-proveedores:3001
+      COMPRAS_URL: http://ms-compras:5000
+      NOTIFICACIONES_URL: http://ms-notificaciones:5006
+      REPORTES_URL: http://ms-reportes:5000
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@inventario.local}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE:-Administrador}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Inventario2026}
+      USUARIOS_INICIALES_PASSWORD: ${USUARIOS_INICIALES_PASSWORD:-Inventario2026}
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
+    ports:
+      - "127.0.0.1:8000:80"
+    depends_on:
+      gateway-mysql:
+        condition: service_healthy
+      ms-productos:
+        condition: service_started
+      ms-proveedores:
+        condition: service_started
+      ms-inventario:
+        condition: service_started
+      ms-compras:
+        condition: service_started
+      ms-notificaciones:
+        condition: service_started
+    networks:
+      redapi:
+        aliases:
+          - api-gateway
+
+  # ----------------------------------------------------------------------------
+  # 8. Frontend (React 19 + Nginx Reverse Proxy hacia api-gateway)
+  # ----------------------------------------------------------------------------
+  front-end:
+    build:
+      context: ./front-end
+      dockerfile: Dockerfile
+    image: front-end-inventarios:dev
+    container_name: front-end-app
+    restart: unless-stopped
+    environment:
+      PORT: "80"
+      GATEWAY_URL: http://api-gateway
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks:
+      redapi:
+        aliases:
+          - front-end
+
+volumes:
+  rabbitmq_data:
+  ms_productos_mysql:
+  ms_proveedores_mysql:
+  ms_inventario_mysql:
+  ms_compras_mysql:
+  ms_notificaciones_data:
+  gateway_mysql:
+
+networks:
+  redapi:
+    name: redapi
+    driver: bridge

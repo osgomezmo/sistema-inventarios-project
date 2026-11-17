@@ -80,7 +80,7 @@ export const reglas = {
 
   sku: (v: string): Mensaje => !vacio(v) && !/^[A-Za-z]{3}-\d{4}$/.test(v.trim()) && 'Usa tres letras, guion y cuatro números, por ejemplo LAC-0210.',
 
-  codigoBodega: (v: string): Mensaje => !vacio(v) && !/^[A-Za-z]\d{1,3}$/.test(v.trim()) && 'Usa una letra y hasta tres números, por ejemplo B5.',
+  codigoBodega: (v: string): Mensaje => !vacio(v) && !/^[A-Za-z0-9_-]{2,30}$/.test(v.trim()) && 'Usa de 2 a 30 letras, números o guiones, sin espacios; por ejemplo BOD-SUR.',
 
   facturaPos: (v: string): Mensaje => !vacio(v) && !/^[A-Za-z0-9-]{4,30}$/.test(v.trim()) && 'Usa letras, números y guiones, por ejemplo FV-POS-0019802.',
 

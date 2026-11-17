@@ -7,7 +7,7 @@ import {
 import { useSesion, useUsuario } from '../auth/Sesion'
 import { nombreRol, puedeVer, type Operacion } from '../auth/permisos'
 import { useBodega } from '../contexto/Bodega'
-import { notificacionesApi, reportesApi } from '../api/cliente'
+import { notificacionesApi, stockApi } from '../api/cliente'
 import { ProveedorAvisos } from '../contexto/Avisos'
 import { Marca } from './Marca'
 import { useEsMovil } from '../lib/useEsMovil'
@@ -56,10 +56,13 @@ export function Shell() {
   const menuRef = useRef<HTMLDivElement>(null)
   const esMovil = useEsMovil()
 
+  // Contadores de la barra: si un servicio no responde, el contador simplemente no aparece.
   useEffect(() => {
     let vigente = true
-    notificacionesApi.listar(usuario.rol, { leida: false }).then((r) => vigente && setSinLeer(r.meta.total))
-    reportesApi.stockBajo(idBodega).then((r) => vigente && setStockBajo(r.length))
+    notificacionesApi.listar({ leida: false }).then((r) => vigente && setSinLeer(r.meta.total), () => vigente && setSinLeer(0))
+    if (idBodega) {
+      stockApi.listar({ id_bodega: idBodega, bajo_minimo: true, per_page: 1 }).then((r) => vigente && setStockBajo(r.meta.total), () => vigente && setStockBajo(0))
+    }
     setRielAbierto(false)
     return () => { vigente = false }
   }, [usuario.rol, idBodega, ubicacion.pathname])
@@ -95,7 +98,7 @@ export function Shell() {
         <form className="buscador" role="search" onSubmit={buscar}>
           <Search size={20} aria-hidden />
           <label htmlFor="buscar-global" className="solo-lector">Buscar</label>
-          <input id="buscar-global" name="q" type="search" placeholder="Buscar SKU, producto o documento (OC-2026-0015)" autoComplete="off" maxLength={60}
+          <input id="buscar-global" name="q" type="search" placeholder="Buscar SKU, producto o documento (OC-2026-000015)" autoComplete="off" maxLength={60}
             aria-invalid={avisoBusqueda || undefined} aria-describedby={avisoBusqueda ? 'buscar-aviso' : undefined} onInput={() => avisoBusqueda && setAvisoBusqueda(false)} />
           {avisoBusqueda && <span id="buscar-aviso" className="buscador-aviso" role="alert">Escribe al menos 2 caracteres para buscar.</span>}
         </form>
@@ -108,7 +111,6 @@ export function Shell() {
         </div>
 
         <div className="barra-derecha">
-          <span className="muestra" title="Plantilla de interfaz: todos los datos son de ejemplo">Datos de ejemplo</span>
           <Link to="/notificaciones" className="icono-btn" aria-label={`Notificaciones, ${sinLeer} sin leer`}>
             <Bell size={24} aria-hidden />
             {sinLeer > 0 && <span className="contador" aria-hidden>{sinLeer}</span>}
@@ -152,7 +154,7 @@ export function Shell() {
             </div>
           )
         })}
-        <div className="riel-pie">Plantilla de interfaz · entrega 3</div>
+        <div className="riel-pie">Estiba · entrega 3</div>
       </nav>
 
       <main className="contenido" id="contenido">

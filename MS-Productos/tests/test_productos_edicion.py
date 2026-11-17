@@ -19,7 +19,7 @@ TOKEN = "token-de-prueba"
 CABECERAS = {"Authorization": f"Bearer {TOKEN}"}
 CAMPOS = {
     "id_producto", "sku", "nombre", "descripcion", "marca", "id_categoria",
-    "unidad_medida", "precio_venta", "stock_minimo", "estado",
+    "unidad_medida", "precio_venta", "stock_minimo", "estado", "creado_en",
 }
 CONFIG = cargar_configuracion()
 QUITAR = object()
@@ -141,6 +141,7 @@ def test_cambia_todos_los_campos_editables(cliente, categoria, producto):
     assert respuesta.status_code == 200
     cuerpo = respuesta.get_json()
     assert set(cuerpo) == CAMPOS
+    assert isinstance(cuerpo["creado_en"], str) and cuerpo["creado_en"].endswith("Z")
     assert cuerpo == {
         "id_producto": producto,
         "sku": PREFIJO_SKU + "001",
@@ -152,6 +153,7 @@ def test_cambia_todos_los_campos_editables(cliente, categoria, producto):
         "precio_venta": 3500.75,
         "stock_minimo": 1.125,
         "estado": "ACTIVO",
+        "creado_en": cuerpo["creado_en"],
     }
     otra = cliente.get(f"/productos/{producto}", headers=CABECERAS)
     assert otra.get_json() == cuerpo

@@ -1,0 +1,50 @@
+# Front-end de Estiba: sirve la aplicación de React y reenvía /api al API Gateway.
+# Plantilla: al arrancar, la imagen de Nginx reemplaza GATEWAY_URL con la variable de entorno.
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # DNS interno de Docker. Con el gateway en una variable, Nginx lo resuelve en cada
+    # petición: arranca aunque el gateway aún no esté arriba y sigue su IP si se reinicia.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $gateway ${GATEWAY_URL};
+
+    client_max_body_size 2m;
+    server_tokens off;
+
+    # API: el gateway valida el token de Sanctum y llama a cada microservicio.
+    # Sin ruta en proxy_pass, la URI llega intacta (/api/productos?page=2).
+    location /api/ {
+        proxy_pass $gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+
+    # Salud del contenedor (HEALTHCHECK del Dockerfile)
+    location = /salud {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Archivos de Vite con hash en el nombre: se pueden guardar en caché un año
+    location /assets/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Rutas de React Router (/stock, /kardex...): cualquier otra ruta devuelve index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

@@ -101,16 +101,6 @@
   gap: var(--e-3);
 }
 
-.muestra {
-  font-size: var(--t-xs);
-  font-weight: 600;
-  color: var(--amarillo-tinta);
-  border: 1.5px dashed var(--amarillo-tinta);
-  border-radius: var(--r-1);
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-
 .icono-btn {
   position: relative;
   display: grid;
@@ -323,7 +313,6 @@
   .riel a .rotulo-riel,
   .riel a .contador-riel,
   .riel-pie { display: none; }
-  .muestra { display: none; }
   .usuario-btn .usuario-texto { display: none; }
 }
 

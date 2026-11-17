@@ -4,7 +4,7 @@
 import { useState, type FocusEvent, type FormEvent, type ReactNode } from 'react'
 import type { UnidadMedida } from '../api/types'
 import { altasApi } from '../api/cliente'
-import { categorias, roles } from '../api/mock/maestros'
+import { categorias, nombreCategoria, roles } from '../api/maestros'
 import { nombreRol } from '../auth/permisos'
 import { BotonEnvio, Campo, ErrorCaja, erroresCampo } from '../componentes/ui'
 import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar, type Errores } from '../lib/validacion'
@@ -53,12 +53,16 @@ export function AltaProducto({ listo, cancelar }: PropsAlta) {
     sku: [reglas.requerido(v.sku, 'Escribe el SKU.'), reglas.sku(v.sku)],
     nombre: largoRequerido(v.nombre, 3, 80, 'Escribe el nombre del producto.'),
     marca: largoRequerido(v.marca, 2, 40, 'Escribe la marca.'),
-    id_categoria: [reglas.requerido(v.id_categoria, 'Elige la subcategoría.')],
+    id_categoria: [reglas.requerido(v.id_categoria, 'Elige la categoría.')],
     precio_venta: [reglas.numero(v.precio_venta, { requerido: true, mensajeVacio: 'Escribe el precio de venta.', decimales: 2, mayorQueCero: true, max: 100_000_000, mensajeMax: 'Revisa el precio: supera $ 100.000.000.' })],
     stock_minimo: [reglas.numero(v.stock_minimo, { requerido: true, mensajeVacio: 'Escribe el stock mínimo por bodega.', decimales: decimalesPorUnidad(unidad), min: 0 })],
     descripcion: [reglas.largo(v.descripcion, 0, 200)],
   }))
-  const hojas = categorias.filter((c) => c.id_categoria_padre !== null && c.estado === 'ACTIVO')
+  // ms-productos acepta cualquier categoría activa; las subcategorías se muestran con su raíz.
+  const opciones = categorias
+    .filter((c) => c.estado === 'ACTIVO')
+    .map((c) => ({ id: c.id_categoria, texto: c.id_categoria_padre === null ? c.nombre : `${nombreCategoria(c.id_categoria_padre)} › ${c.nombre}` }))
+    .sort((a, b) => a.texto.localeCompare(b.texto, 'es'))
   return (
     <Marco titulo="Nuevo producto" error={error} enviando={enviando} cancelar={cancelar} alSalir={alSalir} boton="Crear producto"
       onSubmit={(e) => ejecutar(e, async () => {
@@ -73,8 +77,8 @@ export function AltaProducto({ listo, cancelar }: PropsAlta) {
       <div className="fila-campos">
         <Campo id="ap-cat" etiqueta="Categoría" error={campos.id_categoria}>
           <select id="ap-cat" name="id_categoria" value={v.id_categoria} onChange={set('id_categoria')}>
-            <option value="">Elige una subcategoría</option>
-            {hojas.map((c) => <option key={c.id_categoria} value={c.id_categoria}>{categorias.find((x) => x.id_categoria === c.id_categoria_padre)!.nombre} › {c.nombre}</option>)}
+            <option value="">Elige una categoría</option>
+            {opciones.map((c) => <option key={c.id} value={c.id}>{c.texto}</option>)}
           </select>
         </Campo>
         <Campo id="ap-unidad" etiqueta="Unidad de medida">
@@ -154,7 +158,7 @@ export function AltaBodega({ listo, cancelar }: PropsAlta) {
     <Marco titulo="Nueva bodega" error={error} enviando={enviando} cancelar={cancelar} alSalir={alSalir} boton="Crear bodega"
       onSubmit={(e) => ejecutar(e, async () => { const b = await altasApi.bodega({ codigo: v.codigo.trim().toUpperCase(), nombre: v.nombre.trim(), direccion: v.direccion.trim() }); listo(`Bodega ${b.codigo} creada`) })}>
       <div className="fila-campos">
-        <Campo id="ab-cod" etiqueta="Código" error={campos.codigo} ayuda="Una letra y hasta tres números, por ejemplo B5."><input id="ab-cod" name="codigo" maxLength={4} value={v.codigo} onChange={set('codigo')} /></Campo>
+        <Campo id="ab-cod" etiqueta="Código" error={campos.codigo} ayuda="Único, sin espacios. Por ejemplo BOD-SUR."><input id="ab-cod" name="codigo" maxLength={30} value={v.codigo} onChange={set('codigo')} /></Campo>
         <Campo id="ab-nombre" etiqueta="Nombre" error={campos.nombre}><input id="ab-nombre" name="nombre" maxLength={60} value={v.nombre} onChange={set('nombre')} /></Campo>
         <Campo id="ab-dir" etiqueta="Dirección" error={campos.direccion}><input id="ab-dir" name="direccion" maxLength={120} value={v.direccion} onChange={set('direccion')} /></Campo>
       </div>
@@ -163,7 +167,9 @@ export function AltaBodega({ listo, cancelar }: PropsAlta) {
 }
 
 export function AltaUsuario({ listo, cancelar }: PropsAlta) {
-  const [v, setV] = useState({ nombre: '', email: '', password: '', id_rol: '2' })
+  // Los roles vienen de GET /api/roles; por defecto, el primero que no es administrador.
+  const porDefecto = roles.find((r) => r.rol !== 'ADMINISTRADOR') ?? roles[0]
+  const [v, setV] = useState({ nombre: '', email: '', password: '', id_rol: porDefecto ? String(porDefecto.id_rol) : '' })
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value })
   const { enviando, error, campos, ejecutar, alSalir } = useEnvio(validar({
     nombre: [...largoRequerido(v.nombre, 3, 80, 'Escribe el nombre completo.'), reglas.nombrePersona(v.nombre)],
@@ -181,7 +187,10 @@ export function AltaUsuario({ listo, cancelar }: PropsAlta) {
       <div className="fila-campos">
         <Campo id="au-pw" etiqueta="Contraseña inicial" error={campos.password} ayuda="Mínimo 8 caracteres, con letras y números; la persona la cambia al ingresar."><input id="au-pw" name="password" type="password" autoComplete="new-password" maxLength={128} value={v.password} onChange={set('password')} /></Campo>
         <Campo id="au-rol" etiqueta="Rol" error={campos.id_rol}>
-          <select id="au-rol" name="id_rol" value={v.id_rol} onChange={set('id_rol')}>{roles.map((r) => <option key={r.id_rol} value={r.id_rol}>{nombreRol[r.nombre]}</option>)}</select>
+          <select id="au-rol" name="id_rol" value={v.id_rol} onChange={set('id_rol')}>
+            {!roles.length && <option value="">No se pudieron cargar los roles</option>}
+            {roles.map((r) => <option key={r.id_rol} value={r.id_rol}>{nombreRol[r.rol]}</option>)}
+          </select>
         </Campo>
       </div>
     </Marco>
