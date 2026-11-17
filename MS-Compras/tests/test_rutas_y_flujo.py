@@ -365,6 +365,7 @@ class TestFlujoOrdenesRecepcionesDevoluciones:
         assert res_borr.get_json()["error"]["codigo"] == "TRANSICION_INVALIDA"
 
     def test_filtros_de_consulta_ordenes_y_devoluciones(self, client, monkeypatch):
+        import app.repositorios.ordenes as repo_ordenes
         import app.routes.ordenes as rutas_ordenes
         import app.routes.devoluciones as rutas_devoluciones
 
@@ -372,13 +373,13 @@ class TestFlujoOrdenesRecepcionesDevoluciones:
             "/ordenes-compra?estado=INEXISTENTE",
             headers=auth_headers("admin"),
         )
-        assert res_estado_malo.status_code == 400
+        assert res_estado_malo.status_code == 422
 
         res_rango_ilogico = client.get(
             "/devoluciones-proveedor?desde=2026-11-20&hasta=2026-11-01",
             headers=auth_headers("compras"),
         )
-        assert res_rango_ilogico.status_code == 400
+        assert res_rango_ilogico.status_code == 422
 
         monkeypatch.setattr(rutas_ordenes, "listar_ordenes", lambda **_kw: ([{"id_orden": 1}], 1))
         res_ord = client.get(
@@ -395,3 +396,266 @@ class TestFlujoOrdenesRecepcionesDevoluciones:
         )
         assert res_dev.status_code == 200
         assert res_dev.get_json()["data"] == [{"id_devolucion": 3}]
+
+        ahora = datetime(2026, 11, 14, 19, 0, 0)
+        cursor_detalle = FakeCursor(
+            [
+                {
+                    "id_orden": 15,
+                    "numero": "OC-2026-000015",
+                    "id_proveedor": 2,
+                    "id_bodega_destino": 1,
+                    "estado": "RECIBIDA_PARCIAL",
+                    "total": Decimal("1000.00"),
+                    "id_usuario_creador": 4,
+                    "id_usuario_aprobador": 2,
+                    "motivo_anulacion": None,
+                    "creada_en": ahora,
+                    "aprobada_en": ahora,
+                    "actualizada_en": ahora,
+                },
+                [
+                    {
+                        "id_detalle": 21,
+                        "id_orden": 15,
+                        "sku": "LAC-0001",
+                        "cantidad_pedida": Decimal("10.000"),
+                        "cantidad_recibida": Decimal("6.000"),
+                        "cantidad_devuelta": Decimal("1.000"),
+                        "precio_unitario": Decimal("100.00"),
+                    }
+                ],
+                [
+                    {
+                        "id_recepcion": 31,
+                        "id_orden": 15,
+                        "fecha": ahora,
+                        "id_usuario": 7,
+                        "observaciones": "Entrega parcial",
+                    }
+                ],
+                [
+                    {
+                        "id_recepcion": 31,
+                        "id_detalle": 21,
+                        "sku": "LAC-0001",
+                        "cantidad": Decimal("6.000"),
+                        "precio_unitario": Decimal("100.00"),
+                    }
+                ],
+                [
+                    {
+                        "id_devolucion": 41,
+                        "id_orden": 15,
+                        "fecha": ahora,
+                        "motivo": "Empaque roto",
+                        "id_usuario": 7,
+                    }
+                ],
+                [
+                    {
+                        "id_devolucion": 41,
+                        "id_detalle": 21,
+                        "sku": "LAC-0001",
+                        "cantidad": Decimal("1.000"),
+                    }
+                ],
+            ]
+        )
+        parchar_lectura(monkeypatch, repo_ordenes, cursor_detalle)
+        res_det = client.get("/ordenes-compra/15", headers=auth_headers("jefe_bodega"))
+        assert res_det.status_code == 200
+        cuerpo_det = res_det.get_json()
+        assert cuerpo_det["recepciones"][0]["items"] == [
+            {"id_detalle": 21, "sku": "LAC-0001", "cantidad": 6.0, "precio_unitario": 100.0}
+        ]
+        assert cuerpo_det["devoluciones"][0]["items"] == [
+            {"id_detalle": 21, "sku": "LAC-0001", "cantidad": 1.0}
+        ]
+
+    def test_flujo_completo_put_aprobar_anular_listar_recepciones_y_crear_devolucion(
+        self, client, monkeypatch
+    ):
+        import app.repositorios.ordenes as repo_ordenes
+        import app.repositorios.recepciones as repo_rec
+        import app.repositorios.devoluciones as repo_dev
+
+        ahora = datetime(2026, 11, 15, 10, 0, 0)
+        monkeypatch.setattr(
+            repo_ordenes,
+            "validar_proveedor_activo",
+            lambda _id: {"id_proveedor": 2, "estado": "ACTIVO"},
+        )
+        eventos_orden = []
+        monkeypatch.setattr(
+            repo_ordenes,
+            "publicar_orden_actualizada",
+            lambda **kw: eventos_orden.append(kw) or "ev-ord",
+        )
+
+        # 1. PUT /ordenes-compra/12 en estado BORRADOR -> 200
+        orden_borrador = {
+            "id_orden": 12,
+            "numero": "OC-2026-000012",
+            "id_proveedor": 2,
+            "id_bodega_destino": 1,
+            "estado": "BORRADOR",
+            "total": Decimal("600.00"),
+            "id_usuario_creador": 7,
+            "id_usuario_aprobador": None,
+            "motivo_anulacion": None,
+            "creada_en": ahora,
+            "aprobada_en": None,
+            "actualizada_en": ahora,
+        }
+        cursor_put_read = FakeCursor([dict(orden_borrador)])
+        parchar_lectura(monkeypatch, repo_ordenes, cursor_put_read)
+        cursor_put_tx = FakeCursor(
+            [
+                dict(orden_borrador),
+                dict(orden_borrador, total=Decimal("900.00")),
+                [
+                    {
+                        "id_detalle": 30,
+                        "id_orden": 12,
+                        "sku": "ACEITE-1L",
+                        "cantidad_pedida": Decimal("3.000"),
+                        "cantidad_recibida": Decimal("0.000"),
+                        "cantidad_devuelta": Decimal("0.000"),
+                        "precio_unitario": Decimal("300.00"),
+                    }
+                ],
+                [],
+                [],
+            ]
+        )
+        parchar_transaccion(monkeypatch, repo_ordenes, cursor_put_tx)
+        res_put = client.put(
+            "/ordenes-compra/12",
+            json={
+                "id_proveedor": 2,
+                "id_bodega_destino": 1,
+                "items": [{"sku": "aceite-1l", "cantidad": 3, "precio_unitario": 300}],
+            },
+            headers=auth_headers("compras"),
+        )
+        assert res_put.status_code == 200
+        assert res_put.get_json()["total"] == 900.0
+
+        # 2. POST /ordenes-compra/12/aprobar -> 200 APROBADA
+        cursor_aprob = FakeCursor(
+            [
+                dict(orden_borrador),
+                dict(orden_borrador, estado="APROBADA", id_usuario_aprobador=9, aprobada_en=ahora),
+                [],
+                [],
+                [],
+            ]
+        )
+        parchar_transaccion(monkeypatch, repo_ordenes, cursor_aprob)
+        res_aprob = client.post("/ordenes-compra/12/aprobar", headers=auth_headers("gerente", user_id=9))
+        assert res_aprob.status_code == 200
+        assert res_aprob.get_json()["estado"] == "APROBADA"
+
+        # 3. POST /ordenes-compra/12/anular (sin recepciones) -> 200 ANULADA
+        cursor_anul = FakeCursor(
+            [
+                dict(orden_borrador, estado="APROBADA"),
+                {"cnt": 0},
+                dict(orden_borrador, estado="ANULADA", motivo_anulacion="Error en pedido"),
+                [],
+                [],
+                [],
+            ]
+        )
+        parchar_transaccion(monkeypatch, repo_ordenes, cursor_anul)
+        res_anul = client.post(
+            "/ordenes-compra/12/anular",
+            json={"motivo": "Error en pedido"},
+            headers=auth_headers("gerente"),
+        )
+        assert res_anul.status_code == 200
+        assert res_anul.get_json()["estado"] == "ANULADA"
+
+        # 4. GET /ordenes-compra/12/recepciones -> 200 lista con items
+        cursor_list_rec = FakeCursor(
+            [
+                dict(orden_borrador, estado="RECIBIDA"),
+                [
+                    {
+                        "id_recepcion": 5,
+                        "id_orden": 12,
+                        "fecha": ahora,
+                        "id_usuario": 7,
+                        "observaciones": "Completa",
+                    }
+                ],
+                [
+                    {
+                        "id_recepcion": 5,
+                        "id_detalle": 30,
+                        "sku": "ACEITE-1L",
+                        "cantidad": Decimal("3.000"),
+                        "precio_unitario": Decimal("300.00"),
+                    }
+                ],
+            ]
+        )
+        parchar_lectura(monkeypatch, repo_rec, cursor_list_rec)
+        res_list_rec = client.get("/ordenes-compra/12/recepciones", headers=auth_headers("jefe_bodega"))
+        assert res_list_rec.status_code == 200
+        assert res_list_rec.get_json()[0]["items"][0]["sku"] == "ACEITE-1L"
+
+        # 5. POST /ordenes-compra/12/devoluciones -> 201 y publica DevolucionProveedorRegistrada
+        eventos_dev = []
+        monkeypatch.setattr(
+            repo_dev,
+            "publicar_devolucion_registrada",
+            lambda **kw: eventos_dev.append(kw) or "ev-dev",
+        )
+        cursor_dev_ok = FakeCursor(
+            [
+                dict(orden_borrador, estado="RECIBIDA"),
+                [
+                    {
+                        "id_detalle": 30,
+                        "id_orden": 12,
+                        "sku": "ACEITE-1L",
+                        "cantidad_pedida": Decimal("3.000"),
+                        "cantidad_recibida": Decimal("3.000"),
+                        "cantidad_devuelta": Decimal("0.000"),
+                        "precio_unitario": Decimal("300.00"),
+                    }
+                ],
+                {
+                    "id_devolucion": 9,
+                    "id_orden": 12,
+                    "fecha": ahora,
+                    "motivo": "Botella rota",
+                    "id_usuario": 7,
+                },
+            ]
+        )
+        parchar_transaccion(monkeypatch, repo_dev, cursor_dev_ok)
+        res_dev_ok = client.post(
+            "/ordenes-compra/12/devoluciones",
+            json={"motivo": "Botella rota", "items": [{"id_detalle": 30, "cantidad": 1}]},
+            headers=auth_headers("jefe_bodega"),
+        )
+        assert res_dev_ok.status_code == 201
+        assert res_dev_ok.get_json()["id_devolucion"] == 9
+        assert eventos_dev[0]["items"] == [{"sku": "ACEITE-1L", "cantidad": Decimal("1.000")}]
+
+    def test_datos_iniciales_ordenes_coherentes_e_idempotentes(self):
+        from db import datos_iniciales as datos
+
+        assert len(datos.ORDENES_INICIALES) == 5
+        estados = {o["estado"] for o in datos.ORDENES_INICIALES}
+        assert estados == {"RECIBIDA", "RECIBIDA_PARCIAL", "APROBADA", "BORRADOR", "ANULADA"}
+
+        cursor_vacio = FakeCursor([None, None, None, None, None])
+        insertadas = datos.insertar(cursor_vacio)
+        assert insertadas == 5
+
+        cursor_existente = FakeCursor([{"id_orden": 1}] * 5)
+        assert datos.insertar(cursor_existente) == 0

@@ -2,19 +2,20 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Plus } from 'lucide-react'
 import { devolucionesClienteApi, devolucionesProveedorApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku, productos, proveedorPorId, usuarioPorId } from '../api/mock/maestros'
-import { ordenes } from '../api/mock/simulacion'
+import { bodega as bodegaDe, nombreUsuario, producto, productoPorSku, productos, proveedor } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { puedeEditar, puedeVer } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
 import { useBodega } from '../contexto/Bodega'
-import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, Vacio, erroresCampo } from '../componentes/ui'
+import { useMaestros } from '../contexto/Maestros'
+import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, Paginacion, Vacio, erroresCampo } from '../componentes/ui'
 import { cantidad, fechaHora, numeroMovimiento, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 import { aNumero, decimalesPorUnidad, reglas, useValidacion, validar } from '../lib/validacion'
 
 export function Devoluciones() {
   const usuario = useUsuario()
+  useMaestros()
   const [params, setParams] = useSearchParams()
   const verClientes = puedeVer(usuario.rol, 'devolucionCliente')
   const verProveedores = puedeVer(usuario.rol, 'devolucionProveedor')
@@ -37,66 +38,70 @@ export function Devoluciones() {
 }
 
 function DeClientes() {
-  const c = useConsulta(() => devolucionesClienteApi.listar(), [])
+  const [page, setPage] = useState(1)
+  const c = useConsulta(() => devolucionesClienteApi.listar({ page }), [page])
   return (
     <div className="tabla-envoltura" role="tabpanel">
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       {!c.datos && !c.error && <Cargando />}
       {c.datos && (c.datos.data.length === 0 ? <Vacio titulo="Sin devoluciones de clientes" /> : (
-        <table className="tabla">
-          <thead><tr><th>Movimiento</th><th>Fecha</th><th>Factura POS</th><th>Producto</th><th>Bodega</th><th className="num">Cantidad</th><th>Motivo</th><th>Registró</th></tr></thead>
-          <tbody>
-            {c.datos.data.map((m) => {
-              const p = productoPorSku.get(m.sku)!
-              return (
-                <tr key={m.id_movimiento}>
-                  <td className="doc">{numeroMovimiento(m.id_movimiento)}</td>
-                  <td className="cifra">{fechaHora(m.fecha)}</td>
-                  <td>{m.documento_referencia}</td>
-                  <td>{p.nombre}<span className="secundario">{m.sku}</span></td>
-                  <td>{bodegaPorId.get(m.id_bodega)!.codigo}</td>
-                  <td className="num cifra mas">+{cantidad(m.cantidad, p.unidad_medida)}</td>
-                  <td>{m.motivo}</td>
-                  <td>{usuarioPorId.get(m.id_usuario)?.nombre}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <>
+          <table className="tabla">
+            <thead><tr><th>Movimiento</th><th>Fecha</th><th>Factura POS</th><th>Producto</th><th>Bodega</th><th className="num">Cantidad</th><th>Motivo</th><th>Registró</th></tr></thead>
+            <tbody>
+              {c.datos.data.map((m) => {
+                const p = producto(m.sku)
+                return (
+                  <tr key={m.id_movimiento}>
+                    <td className="doc">{numeroMovimiento(m.id_movimiento)}</td>
+                    <td className="cifra">{fechaHora(m.fecha)}</td>
+                    <td>{m.documento_referencia}</td>
+                    <td>{p.nombre}<span className="secundario">{m.sku}</span></td>
+                    <td>{bodegaDe(m.id_bodega).codigo}</td>
+                    <td className="num cifra mas">+{cantidad(m.cantidad, p.unidad_medida)}</td>
+                    <td>{m.motivo}</td>
+                    <td>{nombreUsuario(m.id_usuario)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <Paginacion meta={c.datos.meta} cambiar={setPage} />
+        </>
       ))}
     </div>
   )
 }
 
 function AProveedores() {
-  const c = useConsulta(() => devolucionesProveedorApi.listar(), [])
+  const [page, setPage] = useState(1)
+  const c = useConsulta(() => devolucionesProveedorApi.listar({ page }), [page])
   return (
     <div className="tabla-envoltura" role="tabpanel">
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       {!c.datos && !c.error && <Cargando />}
       {c.datos && (c.datos.data.length === 0 ? <Vacio titulo="Sin devoluciones a proveedores">Se registran desde una orden de compra recibida.</Vacio> : (
-        <table className="tabla">
-          <thead><tr><th>Orden</th><th>Fecha</th><th>Proveedor</th><th>Productos</th><th>Motivo</th><th>Registró</th></tr></thead>
-          <tbody>
-            {c.datos.data.map((d) => {
-              const o = ordenes.find((x) => x.id_orden === d.id_orden)!
-              return (
+        <>
+          <table className="tabla">
+            <thead><tr><th>Orden</th><th>Fecha</th><th>Proveedor</th><th>Productos</th><th>Motivo</th><th>Registró</th></tr></thead>
+            <tbody>
+              {c.datos.data.map((d) => (
                 <tr key={d.id_devolucion}>
-                  <td><Link className="doc" to={`/ordenes-compra/${o.id_orden}`}>{o.numero}</Link></td>
+                  <td><Link className="doc" to={`/ordenes-compra/${d.id_orden}`}>{d.numero_orden ?? `Orden ${d.id_orden}`}</Link></td>
                   <td className="cifra">{fechaHora(d.fecha)}</td>
-                  <td>{proveedorPorId.get(d.id_proveedor)!.razon_social}</td>
+                  <td>{proveedor(d.id_proveedor).razon_social}</td>
                   <td>{d.items.map((i) => {
-                    const det = o.items.find((x) => x.id_detalle === i.id_detalle)!
-                    const p = productoPorSku.get(det.sku)!
-                    return <span key={i.id_detalle} style={{ display: 'block' }}>{p.nombre}: {cantidad(i.cantidad, p.unidad_medida)}</span>
+                    const p = i.sku ? producto(i.sku) : null
+                    return <span key={i.id_detalle} style={{ display: 'block' }}>{p ? `${p.nombre}: ${cantidad(i.cantidad, p.unidad_medida)}` : `Renglón ${i.id_detalle}: ${i.cantidad}`}</span>
                   })}</td>
                   <td>{d.motivo}</td>
-                  <td>{usuarioPorId.get(d.id_usuario)?.nombre}</td>
+                  <td>{nombreUsuario(d.id_usuario)}</td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+          <Paginacion meta={c.datos.meta} cambiar={setPage} />
+        </>
       ))}
     </div>
   )
@@ -130,8 +135,8 @@ export function NuevaDevolucionCliente() {
     setEnviando(true)
     setError(null)
     try {
-      const m = await devolucionesClienteApi.crear({ sku, id_bodega: bodega, cantidad: aNumero(cant) ?? 0, factura_pos: factura.trim().toUpperCase(), motivo: motivo.trim() }, usuario.id)
-      avisar(`Devolución registrada como ${numeroMovimiento(m.id_movimiento)}: reingresan ${cantidad(m.cantidad, p!.unidad_medida)}`)
+      const m = await devolucionesClienteApi.crear({ sku, id_bodega: bodega, cantidad: aNumero(cant) ?? 0, factura_pos: factura.trim().toUpperCase(), motivo: motivo.trim() })
+      avisar(`Devolución registrada como ${numeroMovimiento(m.id_movimiento)}: reingresan ${cantidad(m.cantidad, producto(m.sku).unidad_medida)}`)
       navegar('/devoluciones?de=clientes')
     } catch (err) {
       setError(err as Error)

@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node db/aplicar_migraciones.js",
+    "seed": "node db/datos_iniciales.js",
     "test": "jest --runInBand"
   },
   "keywords": [

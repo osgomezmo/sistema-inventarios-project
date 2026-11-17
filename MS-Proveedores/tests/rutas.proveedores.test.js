@@ -206,6 +206,46 @@ describe('MS-Proveedores | Rutas HTTP, seguridad y reglas de negocio', () => {
         .set(headers('admin'));
       expect(resContDel.status).toBe(204);
 
+      repo.actualizarContacto.mockResolvedValueOnce({
+        id_contacto: 3,
+        nombre: 'Carlos Perez Actualizado',
+        cargo: 'Director Comercial',
+        telefono: '3009876543',
+        email: 'carlos@norte.co',
+      });
+      const resContPut = await request(app)
+        .put('/proveedores/7/contactos/3')
+        .set(headers('compras'))
+        .send({
+          nombre: 'Carlos Perez Actualizado',
+          cargo: 'Director Comercial',
+          telefono: '3009876543',
+          email: 'carlos@norte.co',
+        });
+      expect(resContPut.status).toBe(200);
+      expect(resContPut.body.cargo).toBe('Director Comercial');
+
+      repo.listarProductosProveedor.mockResolvedValueOnce([
+        {
+          sku: 'CEM-50KG',
+          precio_compra: 34500.5,
+          dias_entrega: 3,
+          estado: 'ACTIVO',
+        },
+      ]);
+      const resProdGet = await request(app)
+        .get('/proveedores/7/productos')
+        .set(headers('jefe_bodega'));
+      expect(resProdGet.status).toBe(200);
+      expect(resProdGet.body).toEqual([
+        {
+          sku: 'CEM-50KG',
+          precio_compra: 34500.5,
+          dias_entrega: 3,
+          estado: 'ACTIVO',
+        },
+      ]);
+
       repo.upsertProductoProveedor.mockResolvedValueOnce({
         sku: 'CEM-50KG',
         precio_compra: 34500.5,
@@ -228,6 +268,64 @@ describe('MS-Proveedores | Rutas HTTP, seguridad y reglas de negocio', () => {
         .delete('/proveedores/7/productos/cem-50kg')
         .set(headers('admin'));
       expect(resProdDel.status).toBe(204);
+    });
+
+    test('permite crear proveedor con contactos y productos suministrados opcionales y verifica datos iniciales', async () => {
+      const { PROVEEDORES, insertar } = require('../db/datos_iniciales');
+      expect(PROVEEDORES.length).toBeGreaterThanOrEqual(5);
+      const totalSkus = PROVEEDORES.reduce((acc, p) => acc + (p.productos ? p.productos.length : 0), 0);
+      expect(totalSkus).toBe(33);
+
+      // Verifica digito de verificacion DIAN en todos los NIT iniciales
+      const pesos = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71];
+      for (const p of PROVEEDORES) {
+        const m = /^(\d{1,3}(?:\.?\d{3}){2,3})-(\d)$/.exec(p.nit);
+        expect(m).not.toBeNull();
+        const base = m[1].replace(/\./g, '');
+        const suma = [...base].reverse().reduce((a, d, i) => a + Number(d) * pesos[i], 0);
+        const r = suma % 11;
+        const dv = r > 1 ? 11 - r : r;
+        expect(Number(m[2])).toBe(dv);
+      }
+
+      const fakeConn = {
+        query: jest.fn(async (sql) => {
+          if (sql.includes('SELECT id_proveedor')) return [[]];
+          return [{ insertId: 1 }];
+        }),
+      };
+      const sembrado = await insertar(fakeConn, PROVEEDORES.slice(0, 1));
+      expect(sembrado).toEqual({ provInsertados: 1, prodInsertados: 10 });
+
+      repo.crearProveedor.mockResolvedValueOnce({
+        id_proveedor: 20,
+        nit: '900.245.180-4',
+        razon_social: 'Proveedor Integral S.A.S.',
+        telefono: '+57 601 2943300',
+        email: 'ventas@integral.co',
+        direccion: 'Calle 10 # 20-30',
+        estado: 'ACTIVO',
+        contactos: [{ id_contacto: 1, nombre: 'Ana', cargo: 'Ventas', telefono: '3001234567', email: 'ana@integral.co' }],
+      });
+      const resCrear = await request(app)
+        .post('/proveedores')
+        .set(headers('compras'))
+        .send({
+          nit: '900.245.180-4',
+          razon_social: 'Proveedor Integral S.A.S.',
+          telefono: '+57 601 2943300',
+          email: 'ventas@integral.co',
+          direccion: 'Calle 10 # 20-30',
+          contactos: [{ nombre: 'Ana', cargo: 'Ventas', telefono: '3001234567', email: 'ana@integral.co' }],
+          productos: [{ sku: 'LAC-0001', precio_compra: 3450, dias_entrega: 1 }],
+        });
+      expect(resCrear.status).toBe(201);
+      expect(repo.crearProveedor).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contactos: [{ nombre: 'Ana', cargo: 'Ventas', telefono: '3001234567', email: 'ana@integral.co' }],
+          productos: [{ sku: 'LAC-0001', precio_compra: '3450.00', dias_entrega: 1, estado: 'ACTIVO' }],
+        })
+      );
     });
   });
 

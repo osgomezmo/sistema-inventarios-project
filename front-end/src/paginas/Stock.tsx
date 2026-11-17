@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { PackageX, Plus, ScrollText, X } from 'lucide-react'
 import { proveedoresApi, stockApi } from '../api/cliente'
-import { bodegaPorId, categoriaRaiz, productoPorSku } from '../api/mock/maestros'
+import { bodega as bodegaDe, categoriaRaiz, producto, productoPorSku } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { puedeEditar, puedeVer } from '../auth/permisos'
 import { useBodega } from '../contexto/Bodega'
+import { useMaestros } from '../contexto/Maestros'
 import { Cargando, Encabezado, ErrorCaja, EtiquetaSaldo, Vacio } from '../componentes/ui'
 import { cantidad, dinero } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
@@ -13,6 +14,7 @@ import { RackBodega } from '../tres/RackDiferido'
 
 export function Stock() {
   const usuario = useUsuario()
+  const { version } = useMaestros()
   const { idBodega, bodega } = useBodega()
   const navegar = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -20,19 +22,20 @@ export function Stock() {
   const [q, setQ] = useState('')
   const [seleccionado, setSeleccionado] = useState<string | null>(params.get('sku'))
 
-  const c = useConsulta(() => stockApi.listar({ id_bodega: idBodega, per_page: 100 }), [idBodega])
+  const c = useConsulta(() => stockApi.todos({ id_bodega: idBodega }), [idBodega])
 
   const filas = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return (c.datos?.data ?? []).filter((s) => {
+    return (c.datos ?? []).filter((s) => {
       if (seleccionado) return s.sku === seleccionado
-      const p = productoPorSku.get(s.sku)!
+      const p = producto(s.sku)
       return (!soloBajo || s.bajo_minimo) && (!t || s.sku.toLowerCase().includes(t) || p.nombre.toLowerCase().includes(t))
     })
-  }, [c.datos, q, soloBajo, seleccionado])
+    // version: vuelve a filtrar con los nombres nuevos cuando se recargan los maestros
+  }, [c.datos, q, soloBajo, seleccionado, version]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const total = filas.reduce((a, s) => a + s.valor, 0)
-  const verKardex = (sku: string) => navegar(`/kardex?sku=${sku}&id_bodega=${idBodega}`)
+  const verKardex = (sku: string) => navegar(`/kardex?sku=${encodeURIComponent(sku)}&id_bodega=${idBodega}`)
 
   return (
     <>
@@ -49,7 +52,7 @@ export function Stock() {
       {c.datos && (
         <div className="pila">
           <RackBodega
-            saldos={c.datos.data}
+            saldos={c.datos}
             codigoBodega={bodega.codigo}
             nombreBodega={bodega.nombre}
             seleccionado={seleccionado}
@@ -90,7 +93,7 @@ export function Stock() {
                   </thead>
                   <tbody>
                     {filas.map((s) => {
-                      const p = productoPorSku.get(s.sku)!
+                      const p = producto(s.sku)
                       const activo = seleccionado === s.sku
                       return (
                         <tr key={s.sku} className="fila-boton" aria-selected={activo} tabIndex={0}
@@ -124,8 +127,9 @@ export function Stock() {
 export function StockDetalle() {
   const { sku = '' } = useParams()
   const usuario = useUsuario()
+  useMaestros()
   const p = productoPorSku.get(sku)
-  const c = useConsulta(() => Promise.all([stockApi.porSku(sku), proveedoresApi.listar({ sku })]), [sku])
+  const c = useConsulta(() => Promise.all([stockApi.porSku(sku), proveedoresApi.listar({ sku, per_page: 50 }).catch(() => null)]), [sku])
 
   if (!p) return <div className="panel"><Vacio titulo={`No existe el producto ${sku}`} accion={<Link className="btn" to="/stock">Volver al stock</Link>} /></div>
 
@@ -136,7 +140,7 @@ export function StockDetalle() {
         titulo={p.nombre}
         codigo={p.sku}
         descripcion={`${p.marca} · ${categoriaRaiz(p.id_categoria).nombre} · stock mínimo ${cantidad(p.stock_minimo, p.unidad_medida)} por bodega`}
-        acciones={puedeVer(usuario.rol, 'movimientos') && <Link className="btn" to={`/kardex?sku=${sku}`}><ScrollText size={18} aria-hidden />Ver kardex</Link>}
+        acciones={puedeVer(usuario.rol, 'movimientos') && <Link className="btn" to={`/kardex?sku=${encodeURIComponent(sku)}`}><ScrollText size={18} aria-hidden />Ver kardex</Link>}
       />
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       {!c.datos && !c.error && <div className="panel"><Cargando /></div>}
@@ -149,9 +153,10 @@ export function StockDetalle() {
               <table className="tabla">
                 <thead><tr><th>Bodega</th><th className="num">Saldo</th><th className="num">Costo promedio</th><th className="num">Valor</th><th>Estado</th></tr></thead>
                 <tbody>
+                  {stock.por_bodega.length === 0 && <tr><td colSpan={5}>Este producto aún no tiene saldo en ninguna bodega.</td></tr>}
                   {stock.por_bodega.map((b) => (
                     <tr key={b.id_bodega}>
-                      <td><strong>{bodegaPorId.get(b.id_bodega)!.nombre}</strong><span className="secundario">{bodegaPorId.get(b.id_bodega)!.codigo}</span></td>
+                      <td><strong>{bodegaDe(b.id_bodega).nombre}</strong><span className="secundario">{bodegaDe(b.id_bodega).codigo}</span></td>
                       <td className="num cifra">{cantidad(b.cantidad, p.unidad_medida)}</td>
                       <td className="num cifra">{dinero(b.costo_promedio)}</td>
                       <td className="num cifra">{dinero(b.valor)}</td>
@@ -166,7 +171,7 @@ export function StockDetalle() {
             </section>
             <aside className="panel">
               <h2>Proveedores que lo suministran</h2>
-              {provs.data.length === 0 ? <p>Ningún proveedor activo tiene este producto.</p> : (
+              {!provs ? <p>No se pudo consultar ms-proveedores.</p> : provs.data.length === 0 ? <p>Ningún proveedor activo tiene este producto.</p> : (
                 <ul className="lista-rotacion" style={{ gap: 12 }}>
                   {provs.data.map((pr) => <li key={pr.id_proveedor}><Link to={`/proveedores/${pr.id_proveedor}`}>{pr.razon_social}</Link><span>{pr.nit}</span></li>)}
                 </ul>

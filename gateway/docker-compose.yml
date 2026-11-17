@@ -3,6 +3,7 @@ services:
     build: .
     image: api-gateway:dev
     container_name: api-gateway-app
+    restart: unless-stopped
     env_file: .env
     environment:
       # Dentro de la red de Compose, MySQL se alcanza por el nombre del servicio
@@ -24,6 +25,7 @@ services:
   mysql:
     image: mysql:8.4
     container_name: api-gateway-mysql
+    restart: unless-stopped
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: ${DB_DATABASE:?falta DB_DATABASE en .env}

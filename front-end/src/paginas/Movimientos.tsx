@@ -1,14 +1,14 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Plus, TriangleAlert } from 'lucide-react'
 import type { TipoMovimiento, TipoMovimientoManual } from '../api/types'
-import { movimientosApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku, productos, usuarioPorId } from '../api/mock/maestros'
-import { saldosActuales } from '../api/mock/simulacion'
+import { movimientosApi, stockApi } from '../api/cliente'
+import { bodega as bodegaDe, nombreUsuario, producto, productoPorSku, productos } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { puedeEditar } from '../auth/permisos'
 import { useBodega } from '../contexto/Bodega'
 import { useAvisos } from '../contexto/Avisos'
+import { useMaestros } from '../contexto/Maestros'
 import { BotonEnvio, CantidadMov, Campo, Cargando, Encabezado, ErrorCaja, Paginacion, TipoMov, Vacio, erroresCampo } from '../componentes/ui'
 import { cantidad, dinero, fechaHora, nombreTipo, numeroMovimiento, unidad } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
@@ -18,6 +18,7 @@ const TIPOS = Object.keys(nombreTipo) as TipoMovimiento[]
 
 export function Movimientos() {
   const usuario = useUsuario()
+  useMaestros()
   const { idBodega, activas } = useBodega()
   const [params, setParams] = useSearchParams()
   const f = {
@@ -86,18 +87,18 @@ export function Movimientos() {
               </thead>
               <tbody>
                 {c.datos.data.map((m) => {
-                  const p = productoPorSku.get(m.sku)!
+                  const p = producto(m.sku)
                   return (
                     <tr key={m.id_movimiento}>
                       <td><span className="doc">{numeroMovimiento(m.id_movimiento)}</span><span className="secundario"><TipoMov tipo={m.tipo} /></span></td>
                       <td className="cifra">{fechaHora(m.fecha)}</td>
                       <td>{p.nombre}<span className="secundario">{m.sku}</span></td>
-                      <td>{bodegaPorId.get(m.id_bodega)!.codigo}</td>
+                      <td>{bodegaDe(m.id_bodega).codigo}</td>
                       <td className="num"><CantidadMov m={m} /></td>
                       <td className="num cifra">{cantidad(m.saldo_resultante, p.unidad_medida)}</td>
                       <td className="num cifra">{dinero(m.costo_promedio)}</td>
                       <td>{m.motivo ?? '—'}{m.documento_referencia && <span className="secundario">{m.documento_referencia}</span>}</td>
-                      <td>{usuarioPorId.get(m.id_usuario)?.nombre ?? '—'}</td>
+                      <td>{nombreUsuario(m.id_usuario)}</td>
                     </tr>
                   )
                 })}
@@ -133,7 +134,9 @@ export function NuevoMovimiento() {
   const [error, setError] = useState<Error | null>(null)
 
   const p = productoPorSku.get(sku)
-  const saldo = useMemo(() => saldosActuales().find((s) => s.sku === sku && s.id_bodega === bodega), [sku, bodega, enviando])
+  // Saldo vigente del producto en la bodega elegida; sin fila de saldo, el producto está en cero.
+  const consultaSaldo = useConsulta(() => (sku ? stockApi.listar({ sku, id_bodega: bodega, per_page: 1 }) : Promise.resolve(null)), [sku, bodega])
+  const saldo = consultaSaldo.datos?.data[0]
   const n = aNumero(cant) ?? NaN
   const resultado = saldo && n > 0 ? (tipo === 'AJUSTE_POSITIVO' ? saldo.cantidad + n : saldo.cantidad - n) : null
   const disponible = saldo?.cantidad ?? 0
@@ -146,7 +149,7 @@ export function NuevoMovimiento() {
       mensajeVacio: 'Escribe la cantidad.',
       decimales: p ? decimalesPorUnidad(p.unidad_medida) : 3,
       mayorQueCero: true,
-      max: esSalida && p ? disponible : undefined,
+      max: esSalida && p && consultaSaldo.datos ? disponible : undefined,
       mensajeMax: p && `Solo hay ${cantidad(disponible, p.unidad_medida)} en esta bodega; ninguna salida puede dejar el saldo en negativo.`,
     })],
     costo_unitario: tipo === 'AJUSTE_POSITIVO' ? [reglas.numero(costo, { decimales: 2, min: 0 })] : [],
@@ -161,8 +164,8 @@ export function NuevoMovimiento() {
     setEnviando(true)
     setError(null)
     try {
-      const m = await movimientosApi.crear({ sku, id_bodega: bodega, tipo, cantidad: n, costo_unitario: costo ? aNumero(costo) ?? undefined : undefined, motivo: motivo.trim(), documento_referencia: documento.trim() }, usuario.id)
-      avisar(`${numeroMovimiento(m.id_movimiento)} registrado: ${nombreTipo[m.tipo].toLowerCase()} de ${cantidad(m.cantidad, p!.unidad_medida)}`, { a: `/kardex?sku=${m.sku}&id_bodega=${m.id_bodega}`, texto: 'Ver kardex' })
+      const m = await movimientosApi.crear({ sku, id_bodega: bodega, tipo, cantidad: n, costo_unitario: tipo === 'AJUSTE_POSITIVO' && costo ? aNumero(costo) ?? undefined : undefined, motivo, documento_referencia: tipo === 'SALIDA' ? documento : undefined })
+      avisar(`${numeroMovimiento(m.id_movimiento)} registrado: ${nombreTipo[m.tipo].toLowerCase()} de ${cantidad(m.cantidad, producto(m.sku).unidad_medida)}`, { a: `/kardex?sku=${encodeURIComponent(m.sku)}&id_bodega=${m.id_bodega}`, texto: 'Ver kardex' })
       navegar('/movimientos')
     } catch (err) {
       setError(err as Error)
@@ -226,8 +229,8 @@ export function NuevoMovimiento() {
         </form>
 
         <aside className="panel" aria-live="polite">
-          <h2>Saldo en {bodegaPorId.get(bodega)!.codigo}</h2>
-          {!p ? <p>Elige un producto para ver su saldo actual y cómo quedará.</p> : (
+          <h2>Saldo en {bodegaDe(bodega).codigo}</h2>
+          {!p ? <p>Elige un producto para ver su saldo actual y cómo quedará.</p> : consultaSaldo.error ? <ErrorCaja error={consultaSaldo.error} reintentar={consultaSaldo.recargar} /> : consultaSaldo.cargando ? <Cargando filas={3} texto="Consultando el saldo" /> : (
             <>
               <div className="resumen-cifras">
                 <div><span>Actual</span><strong>{cantidad(saldo?.cantidad ?? 0, p.unidad_medida)}</strong></div>

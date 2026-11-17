@@ -42,6 +42,12 @@
 }
 .acciones-separadas .aparte { margin-left: auto; padding-left: var(--e-8); }
 
+/* Acciones de una fila de tabla o de un elemento de lista: botones pequeños juntos, a la derecha.
+   La confirmación en línea («¿Quitar?») reemplaza los botones sin abrir un diálogo. */
+.acciones-fila { display: flex; justify-content: flex-end; align-items: center; gap: var(--e-1, 4px); white-space: nowrap; }
+.acciones-fila.envolver { flex-wrap: wrap; justify-content: flex-start; white-space: normal; }
+.acciones-fila .confirmar { font-size: var(--t-s); font-weight: 600; }
+
 @keyframes girar { to { rotate: 360deg; } }
 
 /* ---------- Formularios ---------- */
@@ -316,6 +322,8 @@
   border: 2px solid currentColor;
   font-size: var(--t-m);
 }
+.aviso { flex-wrap: wrap; }
+.aviso > div { flex: 1 1 14rem; min-width: 0; }
 .aviso svg { flex: none; margin-top: 2px; }
 .aviso strong { display: block; margin-bottom: 2px; }
 .aviso-error { color: var(--rojo); background: var(--rojo-claro); }

@@ -1,26 +1,28 @@
 import { useSearchParams } from 'react-router'
 import { Download } from 'lucide-react'
 import { kardexApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku, productos } from '../api/mock/maestros'
-import { esEntrada } from '../api/mock/simulacion'
+import { bodega as bodegaDe, producto, productos } from '../api/maestros'
 import { useBodega } from '../contexto/Bodega'
+import { useMaestros } from '../contexto/Maestros'
 import { Campo, Cargando, Encabezado, ErrorCaja, TipoMov, Vacio } from '../componentes/ui'
 import { reglas } from '../lib/validacion'
-import { cantidad, dinero, fecha, fechaHora, nombreTipo, numeroMovimiento } from '../lib/formato'
+import { cantidad, dinero, esEntrada, fecha, fechaHora, haceDias, hoy, nombreTipo, numeroMovimiento } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 
 export function Kardex() {
+  useMaestros()
   const { idBodega, activas } = useBodega()
   const [params, setParams] = useSearchParams()
-  const sku = params.get('sku') ?? 'ABA-0112'
+  // Por defecto: el primer producto activo, la bodega de trabajo y los últimos 30 días.
+  const sku = params.get('sku') ?? productos.find((x) => x.estado === 'ACTIVO')?.sku ?? ''
   const bodega = Number(params.get('id_bodega') ?? idBodega)
-  const desde = params.get('desde') ?? '2026-10-20'
-  const hasta = params.get('hasta') ?? '2026-10-29'
-  const p = productoPorSku.get(sku)!
+  const desde = params.get('desde') ?? haceDias(30)
+  const hasta = params.get('hasta') ?? hoy()
+  const p = producto(sku)
   const errorDesde = reglas.requerido(desde, 'Elige la fecha inicial.') || null
   const errorHasta = reglas.requerido(hasta, 'Elige la fecha final.') || reglas.rangoFechas(desde, hasta) || null
-  const rangoValido = !errorDesde && !errorHasta
-  const c = useConsulta(() => (rangoValido ? kardexApi.consultar({ sku, id_bodega: bodega, desde, hasta }) : Promise.resolve(null)), [sku, bodega, desde, hasta])
+  const consultable = !!sku && !!bodega && !errorDesde && !errorHasta
+  const c = useConsulta(() => (consultable ? kardexApi.consultar({ sku, id_bodega: bodega, desde, hasta }) : Promise.resolve(null)), [sku, bodega, desde, hasta])
   const cambiar = (clave: string, valor: string) => {
     const n = new URLSearchParams(params)
     n.set('sku', sku); n.set('id_bodega', String(bodega)); n.set('desde', desde); n.set('hasta', hasta)
@@ -39,7 +41,7 @@ export function Kardex() {
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `kardex-${sku}-${bodegaPorId.get(bodega)!.codigo}-${desde}-${hasta}.csv`
+    a.download = `kardex-${sku}-${bodegaDe(bodega).codigo}-${desde}-${hasta}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -48,14 +50,15 @@ export function Kardex() {
     <>
       <Encabezado
         titulo="Kardex"
-        codigo={sku}
-        descripcion={`${p.nombre} en ${bodegaPorId.get(bodega)!.nombre}, valorizado a costo promedio ponderado.`}
+        codigo={sku || undefined}
+        descripcion={sku ? `${p.nombre} en ${bodegaDe(bodega).nombre}, valorizado a costo promedio ponderado.` : 'Valorizado a costo promedio ponderado.'}
         acciones={<button type="button" className="btn" onClick={exportar} disabled={!c.datos}><Download size={18} aria-hidden />Exportar CSV</button>}
       />
       <div className="filtros">
         <div className="campo ancho">
           <label htmlFor="k-sku">Producto</label>
           <select id="k-sku" value={sku} onChange={(e) => cambiar('sku', e.target.value)}>
+            {!sku && <option value="">No hay productos en el catálogo</option>}
             {productos.map((x) => <option key={x.sku} value={x.sku}>{x.sku} · {x.nombre}</option>)}
           </select>
         </div>
@@ -71,8 +74,9 @@ export function Kardex() {
 
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
       <div className="tabla-envoltura">
-        {!rangoValido && <Vacio titulo="Corrige el rango de fechas">El kardex necesita una fecha inicial y una final, y la final no puede ser anterior.</Vacio>}
-        {rangoValido && !c.datos && !c.error && <Cargando filas={10} />}
+        {!sku && <Vacio titulo="Aún no hay productos">Crea un producto en el catálogo para ver su kardex.</Vacio>}
+        {sku && !consultable && <Vacio titulo="Corrige el rango de fechas">El kardex necesita una fecha inicial y una final, y la final no puede ser anterior.</Vacio>}
+        {consultable && !c.datos && !c.error && <Cargando filas={10} />}
         {c.datos && (
           <table className="tabla">
             <thead>

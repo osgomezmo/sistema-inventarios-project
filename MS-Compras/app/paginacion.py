@@ -21,17 +21,17 @@ def obtener_parametros_paginacion() -> tuple[int, int, int]:
         per_page = int(per_page_raw)
     except ValueError as exc:
         raise ErrorAPI(
-            400,
+            422,
             "VALIDACION",
             "Los parametros page y per_page deben ser enteros.",
         ) from exc
 
     if page < 1:
-        raise ErrorAPI(400, "VALIDACION", "El parametro page debe ser mayor o igual a 1.")
+        raise ErrorAPI(422, "VALIDACION", "El parametro page debe ser mayor o igual a 1.")
 
     if per_page < 1 or per_page > POR_PAGINA_MAXIMO:
         raise ErrorAPI(
-            400,
+            422,
             "VALIDACION",
             f"El parametro per_page debe estar entre 1 y {POR_PAGINA_MAXIMO}.",
         )

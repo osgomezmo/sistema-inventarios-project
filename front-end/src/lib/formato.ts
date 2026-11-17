@@ -41,6 +41,14 @@ export function diaLocal(iso: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
 }
 
+const ENTRADAS: TipoMovimiento[] = ['ENTRADA_COMPRA', 'AJUSTE_POSITIVO', 'TRASLADO_ENTRADA', 'DEVOLUCION_CLIENTE']
+/** Tipos que suben el saldo; el resto lo bajan. */
+export const esEntrada = (tipo: TipoMovimiento) => ENTRADAS.includes(tipo)
+
+/** Día local de hoy (AAAA-MM-DD) y de hace n días, para los filtros de fecha. */
+export const hoy = () => diaLocal(new Date().toISOString())
+export const haceDias = (n: number) => diaLocal(new Date(Date.now() - n * 864e5).toISOString())
+
 export const numeroMovimiento = (id: number) => `MOV-${String(id).padStart(6, '0')}`
 export const numeroTraslado = (id: number) => `TR-${String(id).padStart(4, '0')}`
 

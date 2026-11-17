@@ -2,10 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Check, Minus, Plus } from 'lucide-react'
 import { auth, buscarTodo, usuariosApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku, proveedorPorId } from '../api/mock/maestros'
+import { bodega as bodegaDe, producto, proveedor as proveedorDe } from '../api/maestros'
 import { useUsuario } from '../auth/Sesion'
 import { acceso, nombreRol, type Operacion } from '../auth/permisos'
 import { useAvisos } from '../contexto/Avisos'
+import { useMaestros } from '../contexto/Maestros'
 import { BotonEnvio, Campo, Cargando, Encabezado, ErrorCaja, EtiquetaEstado, EtiquetaOrden, TipoMov, Vacio, erroresCampo } from '../componentes/ui'
 import { dinero, fechaHora, numeroMovimiento } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
@@ -24,31 +25,38 @@ const OPERACIONES: Array<[Operacion, string]> = [
 export function Usuarios() {
   const yo = useUsuario()
   const avisar = useAvisos()
+  const { recargar } = useMaestros()
   const c = useConsulta(() => usuariosApi.listar(), [])
   const [alta, setAlta] = useState(false)
+  const [accionError, setAccionError] = useState<Error | null>(null)
   async function alternar(id: number, estado: 'ACTIVO' | 'INACTIVO') {
-    const u = await usuariosApi.cambiarEstado(id, estado)
-    avisar(estado === 'INACTIVO' ? `${u.nombre} quedó inactivo y se revocaron sus tokens` : `${u.nombre} quedó activo`)
-    c.recargar()
+    setAccionError(null)
+    try {
+      const u = await usuariosApi.cambiarEstado(id, estado)
+      avisar(estado === 'INACTIVO' ? `${u.nombre} quedó inactivo y se revocaron sus tokens` : `${u.nombre} quedó activo`)
+      c.recargar()
+    } catch (e) {
+      setAccionError(e as Error)
+    }
   }
   return (
     <>
-      <Encabezado titulo="Usuarios y roles" descripcion="Los usuarios, roles y tokens viven en el API Gateway. Inactivar a un usuario revoca sus sesiones abiertas."
+      <Encabezado titulo="Usuarios y roles" descripcion="Los usuarios, roles y tokens de Sanctum viven en el API Gateway. Inactivar a un usuario revoca sus sesiones abiertas."
         acciones={<button type="button" className="btn btn-pri" aria-expanded={alta} onClick={() => setAlta(!alta)}><Plus size={18} aria-hidden />Nuevo usuario</button>} />
-      {alta && <AltaUsuario listo={(t) => { avisar(t); setAlta(false); c.recargar() }} cancelar={() => setAlta(false)} />}
+      {alta && <AltaUsuario listo={(t) => { avisar(t); setAlta(false); c.recargar(); recargar().catch(() => {}) }} cancelar={() => setAlta(false)} />}
       {c.error && <ErrorCaja error={c.error} reintentar={c.recargar} />}
+      {accionError && <ErrorCaja error={accionError} />}
       <div className="pila">
         <div className="tabla-envoltura">
           {!c.datos && !c.error && <Cargando />}
           {c.datos && (
             <table className="tabla">
-              <thead><tr><th>Usuario</th><th>Rol</th><th>Último acceso</th><th>Estado</th><th><span className="solo-lector">Acciones</span></th></tr></thead>
+              <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th><span className="solo-lector">Acciones</span></th></tr></thead>
               <tbody>
                 {c.datos.data.map((u) => (
                   <tr key={u.id}>
                     <td><strong>{u.nombre}</strong><span className="secundario">{u.email}</span></td>
                     <td>{nombreRol[u.rol]}</td>
-                    <td className="cifra">{u.ultimo_acceso ? fechaHora(u.ultimo_acceso) : '—'}</td>
                     <td><EtiquetaEstado estado={u.estado} /></td>
                     <td>{u.id !== yo.id && (u.estado === 'ACTIVO'
                       ? <button type="button" className="btn btn-sm btn-fantasma" onClick={() => alternar(u.id, 'INACTIVO')}>Inactivar</button>
@@ -120,13 +128,15 @@ export function Perfil() {
 }
 
 export function Buscar() {
+  const usuario = useUsuario()
+  useMaestros()
   const [params] = useSearchParams()
   const q = params.get('q') ?? ''
-  const c = useConsulta(() => buscarTodo(q), [q])
+  const c = useConsulta(() => buscarTodo(q, usuario.rol), [q, usuario.rol])
   const total = c.datos ? c.datos.productos.length + c.datos.ordenes.length + c.datos.movimientos.length + c.datos.proveedores.length : 0
   return (
     <>
-      <Encabezado titulo={`Resultados para «${q}»`} descripcion="Busca por SKU, nombre de producto, número de orden (OC-2026-0015), movimiento (MOV-004812), factura del POS o proveedor." />
+      <Encabezado titulo={`Resultados para «${q}»`} descripcion="Busca por SKU, nombre de producto, proveedor, número de movimiento (MOV-000123) o, entre los 100 más recientes, número de orden (OC-2026-000015) y factura del POS." />
       {c.error && <ErrorCaja error={c.error} />}
       {!c.datos && !c.error && <div className="panel"><Cargando /></div>}
       {c.datos && (total === 0 ? <div className="panel"><Vacio titulo="Sin resultados">Revisa el número del documento o prueba con parte del nombre.</Vacio></div> : (
@@ -138,12 +148,12 @@ export function Buscar() {
           )}
           {c.datos.ordenes.length > 0 && (
             <section className="tabla-envoltura"><div className="panel-titulo" style={{ padding: '16px 16px 0' }}><h2>Órdenes de compra</h2></div>
-              <table className="tabla"><tbody>{c.datos.ordenes.map((o) => <tr key={o.id_orden}><td><Link className="doc" to={`/ordenes-compra/${o.id_orden}`}>{o.numero}</Link></td><td>{proveedorPorId.get(o.id_proveedor)!.razon_social}</td><td><EtiquetaOrden estado={o.estado} /></td><td className="num cifra">{dinero(o.total)}</td></tr>)}</tbody></table>
+              <table className="tabla"><tbody>{c.datos.ordenes.map((o) => <tr key={o.id_orden}><td><Link className="doc" to={`/ordenes-compra/${o.id_orden}`}>{o.numero}</Link></td><td>{proveedorDe(o.id_proveedor).razon_social}</td><td><EtiquetaOrden estado={o.estado} /></td><td className="num cifra">{dinero(o.total)}</td></tr>)}</tbody></table>
             </section>
           )}
           {c.datos.movimientos.length > 0 && (
             <section className="tabla-envoltura"><div className="panel-titulo" style={{ padding: '16px 16px 0' }}><h2>Movimientos</h2></div>
-              <table className="tabla"><tbody>{c.datos.movimientos.map((m) => <tr key={m.id_movimiento}><td><Link className="doc" to={`/kardex?sku=${m.sku}&id_bodega=${m.id_bodega}`}>{numeroMovimiento(m.id_movimiento)}</Link><span className="secundario"><TipoMov tipo={m.tipo} /></span></td><td>{productoPorSku.get(m.sku)!.nombre}</td><td>{bodegaPorId.get(m.id_bodega)!.codigo}</td><td>{m.documento_referencia}</td><td className="cifra">{fechaHora(m.fecha)}</td></tr>)}</tbody></table>
+              <table className="tabla"><tbody>{c.datos.movimientos.map((m) => <tr key={m.id_movimiento}><td><Link className="doc" to={`/kardex?sku=${encodeURIComponent(m.sku)}&id_bodega=${m.id_bodega}`}>{numeroMovimiento(m.id_movimiento)}</Link><span className="secundario"><TipoMov tipo={m.tipo} /></span></td><td>{producto(m.sku).nombre}</td><td>{bodegaDe(m.id_bodega).codigo}</td><td>{m.documento_referencia}</td><td className="cifra">{fechaHora(m.fecha)}</td></tr>)}</tbody></table>
             </section>
           )}
           {c.datos.proveedores.length > 0 && (

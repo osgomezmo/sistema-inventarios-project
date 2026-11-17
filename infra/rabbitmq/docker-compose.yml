@@ -9,14 +9,28 @@ services:
     env_file:
       - .env
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-inventario}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-inventario_secret}
     volumes:
       - ./definitions.json:/etc/rabbitmq/definitions.json:ro
       - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+    networks:
+      default:
+      redapi:
+        aliases:
+          - rabbitmq-inventario
+          - rabbitmq
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  redapi:
+    external: true

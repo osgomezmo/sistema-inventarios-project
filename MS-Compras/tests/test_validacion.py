@@ -157,7 +157,7 @@ class TestCasosIlogicos:
     def test_rechaza_formato_fecha_invalido_y_observaciones_no_string(self):
         with pytest.raises(ErrorAPI) as exc_fecha:
             parsear_fecha_filtro("14/11/2026", "desde", fin_de_dia=False)
-        assert exc_fecha.value.status_code == 400
+        assert exc_fecha.value.status_code == 422
 
         with pytest.raises(ErrorAPI) as exc_obs:
             validar_recepcion_payload(
@@ -225,5 +225,5 @@ class TestCasosFueraDeRango:
             with app.test_request_context(f"/ordenes-compra?{qs}"):
                 with pytest.raises(ErrorAPI) as exc:
                     obtener_parametros_paginacion()
-                assert exc.value.status_code == 400
+                assert exc.value.status_code == 422
                 assert exc.value.codigo == "VALIDACION"

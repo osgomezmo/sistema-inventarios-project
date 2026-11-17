@@ -108,7 +108,7 @@ def parsear_fecha_filtro(valor: str | None, nombre: str, fin_de_dia: bool) -> da
             fecha = datetime.strptime(bruto, "%Y-%m-%d")
         except ValueError as exc:
             raise ErrorAPI(
-                400,
+                422,
                 "VALIDACION",
                 f"Formato invalido para {nombre}; use YYYY-MM-DD o ISO-8601.",
             ) from exc
@@ -121,7 +121,7 @@ def parsear_fecha_filtro(valor: str | None, nombre: str, fin_de_dia: bool) -> da
         dt = datetime.fromisoformat(iso)
     except ValueError as exc:
         raise ErrorAPI(
-            400,
+            422,
             "VALIDACION",
             f"Formato invalido para {nombre}; use YYYY-MM-DD o ISO-8601.",
         ) from exc
@@ -284,22 +284,22 @@ def parsear_filtros_fecha_y_proveedor() -> tuple[int | None, datetime | None, da
             id_proveedor = int(id_prov_raw)
         except ValueError as exc:
             raise ErrorAPI(
-                400,
+                422,
                 "VALIDACION",
                 "El parametro id_proveedor debe ser un entero positivo.",
             ) from exc
-        if id_proveedor <= 0:
+        if id_proveedor <= 0 or id_proveedor > MAX_INT32:
             raise ErrorAPI(
-                400,
+                422,
                 "VALIDACION",
-                "El parametro id_proveedor debe ser mayor que cero.",
+                f"El parametro id_proveedor debe ser un entero entre 1 y {MAX_INT32}.",
             )
 
     desde = parsear_fecha_filtro(request.args.get("desde"), "desde", fin_de_dia=False)
     hasta = parsear_fecha_filtro(request.args.get("hasta"), "hasta", fin_de_dia=True)
     if desde is not None and hasta is not None and desde > hasta:
         raise ErrorAPI(
-            400,
+            422,
             "VALIDACION",
             "La fecha desde no puede ser posterior a hasta.",
         )

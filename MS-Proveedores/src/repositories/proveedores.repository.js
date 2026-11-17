@@ -136,14 +136,50 @@ async function obtenerProveedorPorId(idProveedor) {
   return formatearProveedor(rows[0], contactosRows.map(formatearContacto));
 }
 
-async function crearProveedor({ nit, razon_social, telefono, email, direccion }) {
+async function crearProveedor({ nit, razon_social, telefono, email, direccion, contactos = [], productos = [] }) {
   try {
-    const resultado = await ejecutarConsulta(
-      `INSERT INTO proveedores (nit, razon_social, telefono, email, direccion, estado)
-       VALUES (?, ?, ?, ?, ?, 'ACTIVO')`,
-      [nit, razon_social, telefono, email, direccion]
-    );
-    return await obtenerProveedorPorId(resultado.insertId);
+    if (contactos.length === 0 && productos.length === 0) {
+      const resultado = await ejecutarConsulta(
+        `INSERT INTO proveedores (nit, razon_social, telefono, email, direccion, estado)
+         VALUES (?, ?, ?, ?, ?, 'ACTIVO')`,
+        [nit, razon_social, telefono, email, direccion]
+      );
+      return await obtenerProveedorPorId(resultado.insertId);
+    }
+
+    const idProveedor = await conTransaccion(async (conexion) => {
+      const [resProv] = await conexion.query(
+        `INSERT INTO proveedores (nit, razon_social, telefono, email, direccion, estado)
+         VALUES (?, ?, ?, ?, ?, 'ACTIVO')`,
+        [nit, razon_social, telefono, email, direccion]
+      );
+      const nuevoId = resProv.insertId;
+
+      for (const ct of contactos) {
+        await conexion.query(
+          `INSERT INTO contactos (id_proveedor, nombre, cargo, telefono, email)
+           VALUES (?, ?, ?, ?, ?)`,
+          [nuevoId, ct.nombre, ct.cargo, ct.telefono, ct.email]
+        );
+      }
+
+      for (const pr of productos) {
+        await conexion.query(
+          `INSERT INTO productos_suministrados (id_proveedor, sku, precio_compra, dias_entrega, estado, actualizado_en)
+           VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())
+           ON DUPLICATE KEY UPDATE
+             precio_compra = VALUES(precio_compra),
+             dias_entrega = VALUES(dias_entrega),
+             estado = VALUES(estado),
+             actualizado_en = UTC_TIMESTAMP()`,
+          [nuevoId, pr.sku, pr.precio_compra, pr.dias_entrega, pr.estado || 'ACTIVO']
+        );
+      }
+
+      return nuevoId;
+    });
+
+    return await obtenerProveedorPorId(idProveedor);
   } catch (err) {
     if (err && err.code === 'ER_DUP_ENTRY') {
       throw new AppError(409, 'NIT_DUPLICADO', 'Ya existe un proveedor con ese NIT.', {

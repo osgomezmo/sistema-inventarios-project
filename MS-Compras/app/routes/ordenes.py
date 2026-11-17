@@ -43,7 +43,7 @@ def ruta_listar_ordenes():
     if estado_raw:
         if estado_raw not in ESTADOS_ORDEN:
             raise ErrorAPI(
-                400,
+                422,
                 "VALIDACION",
                 "Estado de orden invalido.",
                 {"estados_permitidos": sorted(ESTADOS_ORDEN)},

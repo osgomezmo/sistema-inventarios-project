@@ -108,7 +108,7 @@ def _cargar_detalles_por_orden_ids(
 
 
 def _armar_orden_completa(cursor: Any, orden: dict[str, Any]) -> dict[str, Any]:
-    """Adjunta items, recepciones y devoluciones al diccionario de orden."""
+    """Adjunta items, recepciones (con sus items) y devoluciones (con sus items)."""
     id_orden = orden["id_orden"]
     orden["items"] = _obtener_detalles_orden(cursor, id_orden)
 
@@ -121,7 +121,32 @@ def _armar_orden_completa(cursor: Any, orden: dict[str, Any]) -> dict[str, Any]:
         """,
         (id_orden,),
     )
-    orden["recepciones"] = list(cursor.fetchall())
+    recepciones = list(cursor.fetchall())
+    if recepciones:
+        ids_rec = [rec["id_recepcion"] for rec in recepciones]
+        marcadores_rec = ", ".join(["%s"] * len(ids_rec))
+        cursor.execute(
+            f"""
+            SELECT
+                rd.id_recepcion,
+                rd.id_detalle,
+                d.sku,
+                rd.cantidad,
+                d.precio_unitario
+            FROM recepcion_detalle rd
+            INNER JOIN detalles_orden d ON d.id_detalle = rd.id_detalle
+            WHERE rd.id_recepcion IN ({marcadores_rec})
+            ORDER BY rd.id_recepcion ASC, rd.id_detalle ASC
+            """,
+            tuple(ids_rec),
+        )
+        items_por_rec: dict[int, list[dict[str, Any]]] = {rid: [] for rid in ids_rec}
+        for fila in cursor.fetchall():
+            rid = fila.pop("id_recepcion")
+            items_por_rec.setdefault(rid, []).append(fila)
+        for rec in recepciones:
+            rec["items"] = items_por_rec.get(rec["id_recepcion"], [])
+    orden["recepciones"] = recepciones
 
     cursor.execute(
         """
@@ -132,7 +157,31 @@ def _armar_orden_completa(cursor: Any, orden: dict[str, Any]) -> dict[str, Any]:
         """,
         (id_orden,),
     )
-    orden["devoluciones"] = list(cursor.fetchall())
+    devoluciones = list(cursor.fetchall())
+    if devoluciones:
+        ids_dev = [dev["id_devolucion"] for dev in devoluciones]
+        marcadores_dev = ", ".join(["%s"] * len(ids_dev))
+        cursor.execute(
+            f"""
+            SELECT
+                dd.id_devolucion,
+                dd.id_detalle,
+                d.sku,
+                dd.cantidad
+            FROM devolucion_detalle dd
+            INNER JOIN detalles_orden d ON d.id_detalle = dd.id_detalle
+            WHERE dd.id_devolucion IN ({marcadores_dev})
+            ORDER BY dd.id_devolucion ASC, dd.id_detalle ASC
+            """,
+            tuple(ids_dev),
+        )
+        items_por_dev: dict[int, list[dict[str, Any]]] = {did: [] for did in ids_dev}
+        for fila in cursor.fetchall():
+            did = fila.pop("id_devolucion")
+            items_por_dev.setdefault(did, []).append(fila)
+        for dev in devoluciones:
+            dev["items"] = items_por_dev.get(dev["id_devolucion"], [])
+    orden["devoluciones"] = devoluciones
     return orden
 
 

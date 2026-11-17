@@ -3,7 +3,7 @@ parámetros %s; los fragmentos de SQL que se combinan son constantes."""
 
 COLUMNAS = (
     "id_producto, sku, nombre, descripcion, marca, id_categoria,"
-    " unidad_medida, precio_venta, stock_minimo, estado"
+    " unidad_medida, precio_venta, stock_minimo, estado, creado_en"
 )
 COLUMNAS_SKU = "sku, nombre, estado, unidad_medida, stock_minimo, id_categoria"
 ORDEN = "ORDER BY nombre, id_producto"

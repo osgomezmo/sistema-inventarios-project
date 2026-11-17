@@ -6,9 +6,9 @@ import { Html, OrbitControls, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { Saldo } from '../api/types'
-import { productoPorSku } from '../api/mock/maestros'
+import { producto } from '../api/maestros'
 import { cantidad, dinero } from '../lib/formato'
-import { ANCHO_MODULO, MEDIDAS, distribuir, geometriaCajas, geometriaEstiba, geometriaRack, type DistribucionRack, type Posicion } from './rack'
+import { ANCHO_MODULO, MEDIDAS, codigoCorto, distribuir, geometriaCajas, geometriaEstiba, geometriaRack, type CategoriaDe, type DistribucionRack, type Posicion } from './rack'
 import { texturas } from './texturas'
 import fuenteRotulo from '@fontsource/barlow-condensed/files/barlow-condensed-latin-700-normal.woff?url'
 import fuenteEstencil from '@fontsource/big-shoulders-stencil-display/files/big-shoulders-stencil-display-latin-800-normal.woff?url'
@@ -37,14 +37,24 @@ interface Props {
   alto?: number | string
   /** false en la portada: sin rotar, sin zoom y sin selección. */
   interactivo?: boolean
+  /** Categoría de cada SKU; por defecto, la del catálogo cargado del gateway. */
+  categoriaDe?: CategoriaDe
 }
 
 export function RackBodega(props: Props) {
-  const { saldos, codigoBodega, nombreBodega, alto = 460, seleccionado, interactivo = true } = props
-  const d = useMemo(() => distribuir(saldos, codigoBodega), [saldos, codigoBodega])
+  const { saldos, codigoBodega, nombreBodega, alto = 460, seleccionado, interactivo = true, categoriaDe } = props
+  const d = useMemo(() => distribuir(saldos, codigoBodega, categoriaDe), [saldos, codigoBodega, categoriaDe])
   const bajos = saldos.filter((s) => s.bajo_minimo).length
   const [sobre, setSobre] = useState<string | null>(null)
   const destacado = d.posiciones.find((p) => p.saldo.sku === (sobre ?? seleccionado))
+
+  if (saldos.length === 0) {
+    return (
+      <div className="rack-sin-3d" style={{ height: alto }}>
+        <p>{nombreBodega} aún no tiene saldos. El rack se arma con la primera entrada de mercancía.</p>
+      </div>
+    )
+  }
 
   if (!hayWebGL) {
     return (
@@ -116,7 +126,7 @@ function Escena({ d, seleccionado, onSeleccionar, codigoBodega, interactivo = tr
         </mesh>
       ))}
       <Text font={fuenteEstencil} fontSize={0.42} color="#17181b" fillOpacity={0.72} rotation-x={-Math.PI / 2} position={[-1.6, 0.004, MEDIDAS.fondo / 2 + 2.1]} anchorX="center" anchorY="middle">
-        {`PASILLO ${codigoBodega}`}
+        {`PASILLO ${codigoCorto(codigoBodega)}`}
       </Text>
 
       {/* Estructura del rack */}
@@ -308,7 +318,7 @@ function Etiqueta({ p, activo, agotado }: { p: Posicion; activo: boolean; agotad
 
 /** Rótulo de la posición destacada, fijo en la esquina del rack para que nunca quede cortado. */
 function Rotulo({ p, fijo, onVerKardex }: { p: Posicion; fijo: boolean; onVerKardex?: (sku: string) => void }) {
-  const prod = productoPorSku.get(p.saldo.sku)!
+  const prod = producto(p.saldo.sku)
   const agotado = p.saldo.cantidad === 0
   return (
     <div className="rotulo-3d" role="status" aria-live="polite">

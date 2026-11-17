@@ -3,12 +3,12 @@ import { useSearchParams } from 'react-router'
 import { Download, Printer } from 'lucide-react'
 import type { AgruparValorizacion } from '../api/types'
 import { reportesApi } from '../api/cliente'
-import { bodegaPorId, productoPorSku } from '../api/mock/maestros'
+import { bodega as bodegaDe, producto } from '../api/maestros'
 import { useBodega } from '../contexto/Bodega'
 import { BarrasH } from '../componentes/Graficas'
 import { Campo, Cargando, Encabezado, ErrorCaja, EtiquetaSaldo, Vacio } from '../componentes/ui'
 import { reglas } from '../lib/validacion'
-import { cantidad, dinero, dineroCorto, fechaHora } from '../lib/formato'
+import { cantidad, dinero, dineroCorto, fechaHora, haceDias, hoy } from '../lib/formato'
 import { useConsulta } from '../lib/useConsulta'
 
 function descargarCsv(nombre: string, filas: string[][]) {
@@ -97,8 +97,8 @@ function Valorizacion() {
 }
 
 function Rotacion() {
-  const [desde, setDesde] = useState('2026-10-01')
-  const [hasta, setHasta] = useState('2026-10-29')
+  const [desde, setDesde] = useState(() => haceDias(30))
+  const [hasta, setHasta] = useState(hoy)
   const [bodega, setBodega] = useState(0)
   const errorDesde = reglas.requerido(desde, 'Elige la fecha inicial.') || null
   const errorHasta = reglas.requerido(hasta, 'Elige la fecha final.') || reglas.rangoFechas(desde, hasta) || null
@@ -143,8 +143,8 @@ function StockBajo() {
             <thead><tr><th>Producto</th><th>Bodega</th><th className="num">Saldo</th><th className="num">Mínimo</th><th>Estado</th><th>Desde</th></tr></thead>
             <tbody>
               {c.datos.map((a) => {
-                const p = productoPorSku.get(a.sku)!
-                return <tr key={`${a.sku}-${a.id_bodega}`}><td>{p.nombre}<span className="secundario">{a.sku}</span></td><td>{bodegaPorId.get(a.id_bodega)!.codigo}</td><td className="num cifra">{cantidad(a.saldo, p.unidad_medida)}</td><td className="num cifra">{cantidad(a.stock_minimo, p.unidad_medida)}</td><td><EtiquetaSaldo saldo={{ cantidad: a.saldo, stock_minimo: a.stock_minimo }} /></td><td className="cifra">{fechaHora(a.fecha)}</td></tr>
+                const p = producto(a.sku)
+                return <tr key={`${a.sku}-${a.id_bodega}`}><td>{p.nombre}<span className="secundario">{a.sku}</span></td><td>{bodegaDe(a.id_bodega).codigo}</td><td className="num cifra">{cantidad(a.saldo, p.unidad_medida)}</td><td className="num cifra">{cantidad(a.stock_minimo, p.unidad_medida)}</td><td><EtiquetaSaldo saldo={{ cantidad: a.saldo, stock_minimo: a.stock_minimo }} /></td><td className="cifra">{fechaHora(a.fecha)}</td></tr>
               })}
             </tbody>
           </table>

@@ -91,17 +91,57 @@ function validarProveedorCrear(body) {
   const email = validarEmail(detalles, 'email', data.email);
   const direccion = validarTexto(detalles, 'direccion', data.direccion, { min: 3, max: 200 });
 
+  let contactos = [];
+  if (data.contactos !== undefined) {
+    if (!Array.isArray(data.contactos)) {
+      detalles.contactos = ['El campo contactos debe ser una lista.'];
+    } else {
+      contactos = data.contactos.map((c, idx) => {
+        try {
+          return validarContacto(c);
+        } catch (err) {
+          detalles[`contactos[${idx}]`] = [err.message || 'Contacto inválido.'];
+          return null;
+        }
+      }).filter(Boolean);
+    }
+  }
+
+  let productos = [];
+  if (data.productos !== undefined) {
+    if (!Array.isArray(data.productos)) {
+      detalles.productos = ['El campo productos debe ser una lista.'];
+    } else {
+      productos = data.productos.map((p, idx) => {
+        try {
+          if (!p || typeof p !== 'object' || Array.isArray(p)) {
+            throw new Error('Cada producto suministrado debe ser un objeto.');
+          }
+          const sku = validarSkuParam(p.sku);
+          const validado = validarProductoSuministrado(p);
+          return { sku, ...validado };
+        } catch (err) {
+          detalles[`productos[${idx}]`] = [err.message || 'Producto suministrado inválido.'];
+          return null;
+        }
+      }).filter(Boolean);
+    }
+  }
+
   if (Object.keys(detalles).length > 0) {
     throw new AppError(422, 'VALIDACION', 'Datos inválidos para el proveedor.', detalles);
   }
 
-  return {
+  const resultado = {
     nit,
     razon_social: razonSocial,
     telefono,
     email,
     direccion,
   };
+  if (contactos.length > 0) resultado.contactos = contactos;
+  if (productos.length > 0) resultado.productos = productos;
+  return resultado;
 }
 
 function validarProveedorActualizar(body) {
