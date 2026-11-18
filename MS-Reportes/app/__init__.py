@@ -5,6 +5,7 @@ from app.config import cargar_configuracion
 from app.errors import registrar_manejadores_de_error
 from app.json_provider import ProveedorJson
 from app.routes.health import health_bp
+from app.routes.reportes_routes import reportes_bp
 
 
 def create_app(config=None):
@@ -20,6 +21,7 @@ def create_app(config=None):
     registrar_manejadores_de_error(app)
     registrar_autenticacion(app)
     app.register_blueprint(health_bp)
+    app.register_blueprint(reportes_bp)
 
     iniciar_consumidor = app.config.get("INICIAR_CONSUMIDOR")
     if iniciar_consumidor in (True, "true", "True", "1"):
