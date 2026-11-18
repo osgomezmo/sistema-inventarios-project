@@ -168,6 +168,22 @@ class ProxyTest extends TestCase
         $this->assertSame("sku,valor\nLAC-1,100\n", $respuesta->getContent());
     }
 
+    public function test_un_pdf_conserva_content_type_y_content_disposition_y_cuerpo_binario(): void
+    {
+        $binarioPdf = "%PDF-1.4\n1 0 obj<</Type/Catalog>>\nendobj\ntrailer<</Root 1 0 R>>\n%%EOF\x00\xFF\xFE";
+        Http::fake(['*' => Http::response($binarioPdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="reporte_valorizacion.pdf"',
+        ])]);
+
+        $respuesta = $this->como($this->token())->get('/api/reportes/valorizacion?formato=pdf');
+
+        $respuesta->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'attachment; filename="reporte_valorizacion.pdf"');
+        $this->assertSame($binarioPdf, $respuesta->getContent());
+    }
+
     public function test_correlation_id_del_cliente_se_reenvia_y_se_devuelve(): void
     {
         $this->respuestaOk();

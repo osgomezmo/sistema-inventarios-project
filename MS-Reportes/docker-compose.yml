@@ -1,0 +1,78 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: db_reportes
+    restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${DB_NAME:-ms_reportes}
+      MYSQL_USER: ${DB_USER:-ms_reportes}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-reportes_secret_2026}
+    ports:
+      - "127.0.0.1:33065:3306"
+    volumes:
+      - ./db/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ms_reportes_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - redapi
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ms-reportes:dev
+    container_name: ms-reportes-app
+    restart: unless-stopped
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-ms_reportes}
+      DB_USER: ${DB_USER:-ms_reportes}
+      DB_PASSWORD: ${DB_PASSWORD:-reportes_secret_2026}
+      PRODUCTOS_URL: ${PRODUCTOS_URL:-http://ms-productos:5000}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
+    ports:
+      - "127.0.0.1:5005:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - redapi
+
+  consumidor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ms-reportes:dev
+    container_name: ms-reportes-consumidor
+    restart: unless-stopped
+    command: ["python", "consumidor.py"]
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-ms_reportes}
+      DB_USER: ${DB_USER:-ms_reportes}
+      DB_PASSWORD: ${DB_PASSWORD:-reportes_secret_2026}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - redapi
+
+volumes:
+  ms_reportes_mysql:
+
+networks:
+  redapi:
+    name: redapi
+    driver: bridge

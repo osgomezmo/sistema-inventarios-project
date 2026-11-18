@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ms-reportes-config
+  labels:
+    app: ms-reportes
+data:
+  PORT: "5000"
+  DB_HOST: "db-reportes"
+  DB_PORT: "3306"
+  DB_NAME: "ms_reportes"
+  DB_USER: "ms_reportes"
+  PRODUCTOS_URL: "http://ms-productos:5000"
+  RABBITMQ_URL: "amqp://inventario:inventario_secret@rabbitmq:5672/%2F"
+  INICIAR_CONSUMIDOR: "1"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ms-reportes-secret
+  labels:
+    app: ms-reportes
+type: Opaque
+stringData:
+  SERVICE_TOKEN: "token-secreto-gateway-2026"
+  DB_PASSWORD: "reportes_secret_2026"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-reportes
+  labels:
+    app: ms-reportes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms-reportes
+  template:
+    metadata:
+      labels:
+        app: ms-reportes
+    spec:
+      containers:
+        - name: ms-reportes
+          image: ms-reportes:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: ms-reportes-config
+            - secretRef:
+                name: ms-reportes-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-reportes
+  labels:
+    app: ms-reportes
+spec:
+  type: ClusterIP
+  selector:
+    app: ms-reportes
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
