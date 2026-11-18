@@ -6,10 +6,11 @@ on:
       - main
     types:
       - closed
+  workflow_dispatch:
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     name: Desplegar cambios en VM Debian
     runs-on: ubuntu-latest
 
