@@ -8,7 +8,8 @@
     "test:productos": "python -m pytest MS-Productos/tests/test_base.py MS-Productos/tests/test_db.py MS-Productos/tests/test_json.py MS-Productos/tests/test_utilidades.py MS-Productos/tests/test_endpoints_mock.py -v",
     "test:inventario": "python -m pytest MS-Inventario/tests/test_base.py MS-Inventario/tests/test_cliente_productos.py MS-Inventario/tests/test_consumidor.py MS-Inventario/tests/test_db.py MS-Inventario/tests/test_eventos.py MS-Inventario/tests/test_json.py MS-Inventario/tests/test_motor_movimientos.py MS-Inventario/tests/test_reintento_db.py MS-Inventario/tests/test_utilidades.py MS-Inventario/tests/test_endpoints_mock.py -v",
     "test:proveedores": "npm --prefix MS-Proveedores test",
-    "test:compras": "npm --prefix MS-Compras test",
+    "test:compras": "python -m pytest MS-Compras/tests -v",
+    "test:reportes": "python -m pytest MS-Reportes/tests/test_paso2_1.py MS-Reportes/tests/test_endpoints_mock.py -v",
     "test:notificaciones": "npm --prefix MS-Notificaciones test"
   }
 }

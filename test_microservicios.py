@@ -9,7 +9,8 @@ Ejecuta las suites unitarias y de mocking de endpoints de:
 2. MS-Inventario (Flask / pytest)
 3. MS-Proveedores (Express / Jest + Supertest)
 4. MS-Compras (Flask / pytest)
-5. MS-Notificaciones (Express / Jest + Supertest)
+5. MS-Reportes (Flask / pytest)
+6. MS-Notificaciones (Express / Jest + Supertest)
 """
 
 from __future__ import annotations
@@ -98,6 +99,16 @@ def _suites_microservicios() -> list[tuple[str, Path, list[str]]]:
         ]
     )
 
+    archivos_reportes = (
+        ["-v"]
+        if _puerto_abierto("127.0.0.1", 33065)
+        else [
+            "-v",
+            "tests/test_paso2_1.py",
+            "tests/test_endpoints_mock.py",
+        ]
+    )
+
     return [
         (
             "MS-Productos (Flask)",
@@ -118,6 +129,11 @@ def _suites_microservicios() -> list[tuple[str, Path, list[str]]]:
             "MS-Compras (Flask)",
             RAIZ / "MS-Compras",
             [*_resolver_pytest(RAIZ / "MS-Compras"), "-v"],
+        ),
+        (
+            "MS-Reportes (Flask)",
+            RAIZ / "MS-Reportes",
+            [*_resolver_pytest(RAIZ / "MS-Reportes"), *archivos_reportes],
         ),
         (
             "MS-Notificaciones (Express)",

@@ -8,6 +8,7 @@ import pytest
 from app import create_app
 from app.clientes.productos_client import set_catalogo_mock
 from app.db import abrir_conexion
+from app.errors import ApiError
 from app.repositorios.eventos_repo import procesar_evento
 
 AUTH_HEADERS = {
@@ -30,7 +31,10 @@ def app_cliente():
 
 @pytest.fixture(scope="module")
 def db_conn():
-    conn = abrir_conexion()
+    try:
+        conn = abrir_conexion()
+    except ApiError:
+        pytest.skip("MySQL de desarrollo no disponible en 127.0.0.1:33065")
     yield conn
     conn.close()
 

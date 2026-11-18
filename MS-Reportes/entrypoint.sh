@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Arranque del contenedor: espera a MySQL, aplica las migraciones y ejecuta el comando.
+# Arranque del contenedor: espera a MySQL, aplica las migraciones, siembra
+# datos iniciales si corresponde y ejecuta el comando recibido.
 set -e
 
 INTENTOS="${ESPERA_BASE_INTENTOS:-30}"
@@ -15,7 +16,15 @@ for i in $(seq 1 "$INTENTOS"); do
   sleep 2
 done
 
-python -m db.aplicar_migraciones
+if [ "${MIGRAR_BASE:-1}" != "0" ]; then
+  python -m db.aplicar_migraciones
+fi
+
+if [ "${SEMBRAR_DATOS:-1}" != "0" ]; then
+  python -m db.datos_iniciales
+else
+  echo "SEMBRAR_DATOS=0: no se siembran datos iniciales."
+fi
 
 # Si el comando es gunicorn y se solicita iniciar el consumidor en el mismo contenedor
 if [ "${INICIAR_CONSUMIDOR:-1}" = "1" ] && [[ "$*" =~ gunicorn ]]; then
