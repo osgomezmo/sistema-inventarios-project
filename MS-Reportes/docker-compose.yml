@@ -23,6 +23,52 @@ services:
     networks:
       - redapi
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ms-reportes:dev
+    container_name: ms-reportes-app
+    restart: unless-stopped
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-ms_reportes}
+      DB_USER: ${DB_USER:-ms_reportes}
+      DB_PASSWORD: ${DB_PASSWORD:-reportes_secret_2026}
+      PRODUCTOS_URL: ${PRODUCTOS_URL:-http://ms-productos:5000}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
+    ports:
+      - "127.0.0.1:5005:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - redapi
+
+  consumidor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ms-reportes:dev
+    container_name: ms-reportes-consumidor
+    restart: unless-stopped
+    command: ["python", "consumidor.py"]
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-ms_reportes}
+      DB_USER: ${DB_USER:-ms_reportes}
+      DB_PASSWORD: ${DB_PASSWORD:-reportes_secret_2026}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - redapi
+
 volumes:
   ms_reportes_mysql:
 

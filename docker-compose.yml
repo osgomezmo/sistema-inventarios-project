@@ -328,7 +328,90 @@ services:
           - ms-notificaciones
 
   # ----------------------------------------------------------------------------
-  # 7. API Gateway (Laravel 13 + Apache + MySQL 8.4 propio)
+  # 7. MS-Reportes (Flask + MySQL 8.4 propio)
+  # ----------------------------------------------------------------------------
+  reportes-mysql:
+    image: mysql:8.4
+    container_name: db_reportes
+    restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${REPORTES_DB_NAME:-ms_reportes}
+      MYSQL_USER: ${REPORTES_DB_USER:-ms_reportes}
+      MYSQL_PASSWORD: ${REPORTES_DB_PASSWORD:-reportes_secret_2026}
+    ports:
+      - "127.0.0.1:33065:3306"
+    volumes:
+      - ms_reportes_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    networks:
+      redapi:
+        aliases:
+          - reportes-mysql
+
+  ms-reportes:
+    build:
+      context: ./MS-Reportes
+      dockerfile: Dockerfile
+    image: ms-reportes:dev
+    container_name: ms-reportes-app
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: reportes-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${REPORTES_DB_NAME:-ms_reportes}
+      DB_USER: ${REPORTES_DB_USER:-ms_reportes}
+      DB_PASSWORD: ${REPORTES_DB_PASSWORD:-reportes_secret_2026}
+      PRODUCTOS_URL: http://ms-productos:5000
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-inventario}:${RABBITMQ_PASSWORD:-inventario_secret}@rabbitmq-inventario:5672/%2F
+    ports:
+      - "127.0.0.1:5005:5000"
+    depends_on:
+      reportes-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      redapi:
+        aliases:
+          - ms-reportes
+
+  ms-reportes-consumidor:
+    build:
+      context: ./MS-Reportes
+      dockerfile: Dockerfile
+    image: ms-reportes:dev
+    container_name: ms-reportes-consumidor
+    restart: unless-stopped
+    command: ["python", "consumidor.py"]
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      DB_HOST: reportes-mysql
+      DB_PORT: "3306"
+      DB_NAME: ${REPORTES_DB_NAME:-ms_reportes}
+      DB_USER: ${REPORTES_DB_USER:-ms_reportes}
+      DB_PASSWORD: ${REPORTES_DB_PASSWORD:-reportes_secret_2026}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-inventario}:${RABBITMQ_PASSWORD:-inventario_secret}@rabbitmq-inventario:5672/%2F
+    depends_on:
+      reportes-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ms-reportes:
+        condition: service_started
+    networks:
+      redapi:
+
+  # ----------------------------------------------------------------------------
+  # 8. API Gateway (Laravel 13 + Apache + MySQL 8.4 propio)
   # ----------------------------------------------------------------------------
   gateway-mysql:
     image: mysql:8.4
@@ -401,13 +484,15 @@ services:
         condition: service_started
       ms-notificaciones:
         condition: service_started
+      ms-reportes:
+        condition: service_started
     networks:
       redapi:
         aliases:
           - api-gateway
 
   # ----------------------------------------------------------------------------
-  # 8. Frontend (React 19 + Nginx Reverse Proxy hacia api-gateway)
+  # 9. Frontend (React 19 + Nginx Reverse Proxy hacia api-gateway)
   # ----------------------------------------------------------------------------
   front-end:
     build:
@@ -436,6 +521,7 @@ volumes:
   ms_inventario_mysql:
   ms_compras_mysql:
   ms_notificaciones_data:
+  ms_reportes_mysql:
   gateway_mysql:
 
 networks:
