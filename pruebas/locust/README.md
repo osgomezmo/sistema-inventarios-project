@@ -9,6 +9,13 @@ Cinco pruebas, todas a través del gateway (`http://127.0.0.1:8000`):
 | B3 | `POST /api/movimientos` (SALIDA de 1 unidad) |
 | B4 | `POST /api/traslados` (1 unidad, alternando entre LT-B1 y LT-B2) |
 | B5 | `GET /api/kardex` (LT-0001 en LT-B1, rango del día) |
+| C1 | `GET /api/dashboard` (Consulta de dashboard analítico) |
+| C2 | `GET /api/reportes/valorizacion` (Reporte de valorización JSON) |
+| C3 | `GET /api/reportes/valorizacion?formato=csv` (Reporte de valorización CSV) |
+| C4 | `GET /api/reportes/rotacion` (Reporte de rotación de productos) |
+| C5 | `GET /api/reportes/stock-bajo` (Reporte de alertas de stock bajo) |
+| C6 | `POST /api/dispositivos` (Registro de dispositivo y token FCM) |
+| C7 | `GET /api/notificaciones` (Listado paginado de notificaciones) |
 
 Escenarios: **N** (20 usuarios, 5 por s, 5 min, pausa 1 a 3 s), **P** (50 usuarios,
 10 por s, 5 min, pausa 1 a 3 s) y **E** (de 20 a 200 usuarios sumando 20 cada 30 s,

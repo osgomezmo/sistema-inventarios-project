@@ -17,4 +17,12 @@ done
 
 python -m db.aplicar_migraciones
 
+# Si el comando es gunicorn y se solicita iniciar el consumidor en el mismo contenedor
+if [ "${INICIAR_CONSUMIDOR:-1}" = "1" ] && [[ "$*" =~ gunicorn ]]; then
+  echo "Iniciando consumidor de RabbitMQ en segundo plano..."
+  python consumidor.py &
+  CONSUMIDOR_PID=$!
+  trap 'kill -TERM $CONSUMIDOR_PID 2>/dev/null || true' SIGTERM SIGINT
+fi
+
 exec "$@"
