@@ -21,4 +21,9 @@ def create_app(config=None):
     registrar_autenticacion(app)
     app.register_blueprint(health_bp)
 
+    iniciar_consumidor = app.config.get("INICIAR_CONSUMIDOR")
+    if iniciar_consumidor in (True, "true", "True", "1"):
+        from app.consumidor import iniciar_consumidor_en_hilo
+        iniciar_consumidor_en_hilo(app)
+
     return app

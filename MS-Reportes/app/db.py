@@ -7,7 +7,7 @@ parametrizadas con %s; nunca se concatenan valores dentro del SQL.
 from contextlib import contextmanager
 
 import mysql.connector
-from flask import current_app
+from flask import current_app, has_app_context
 
 from app.errors import ApiError
 
@@ -23,7 +23,15 @@ def set_transaccion_override(override):
 
 
 def _configuracion(config):
-    return config if config is not None else current_app.config
+    if config is not None:
+        return config
+    try:
+        if has_app_context():
+            return current_app.config
+    except Exception:
+        pass
+    from app.config import cargar_configuracion
+    return cargar_configuracion()
 
 
 def abrir_conexion(config=None):
