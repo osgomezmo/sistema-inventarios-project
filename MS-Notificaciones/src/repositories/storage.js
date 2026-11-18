@@ -388,6 +388,8 @@ class StorageRepository {
               const docRef = docExistente.ref;
               const updateData = {
                 mensaje: `Stock bajo el umbral mínimo para SKU ${sku} en Bodega ${idBodega}. Saldo actual: ${saldo}, Mínimo: ${stockMinimo}`,
+                'datos.bodega': Number(idBodega),
+                'datos.id_bodega': Number(idBodega),
                 'datos.saldo': Number(saldo),
                 'datos.stock_minimo': Number(stockMinimo),
                 actualizada_en: ahora,
@@ -409,7 +411,8 @@ class StorageRepository {
                 rol_destino: rolNorm,
                 datos: {
                   sku,
-                  id_bodega: idBodega,
+                  bodega: Number(idBodega),
+                  id_bodega: Number(idBodega),
                   saldo: Number(saldo),
                   stock_minimo: Number(stockMinimo),
                 },
@@ -459,11 +462,13 @@ class StorageRepository {
           n.leida === false &&
           n.datos &&
           n.datos.sku === sku &&
-          String(n.datos.id_bodega) === String(idBodega)
+          String(n.datos.bodega !== undefined ? n.datos.bodega : n.datos.id_bodega) === String(idBodega)
       );
 
       if (notifExistente) {
         notifExistente.mensaje = `Stock bajo el umbral mínimo para SKU ${sku} en Bodega ${idBodega}. Saldo actual: ${saldo}, Mínimo: ${stockMinimo}`;
+        notifExistente.datos.bodega = Number(idBodega);
+        notifExistente.datos.id_bodega = Number(idBodega);
         notifExistente.datos.saldo = Number(saldo);
         notifExistente.datos.stock_minimo = Number(stockMinimo);
         notifExistente.actualizada_en = ahora;
@@ -477,7 +482,8 @@ class StorageRepository {
           rol_destino: rolNorm,
           datos: {
             sku,
-            id_bodega: idBodega,
+            bodega: Number(idBodega),
+            id_bodega: Number(idBodega),
             saldo: Number(saldo),
             stock_minimo: Number(stockMinimo),
           },
