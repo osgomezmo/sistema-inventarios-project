@@ -63,11 +63,15 @@ def reporte_valorizacion():
                 val = item["valor_total"]
                 costo_prom = float(val / cant) if cant > 0 else 0.0
                 datos.append({
+                    "clave": str(item["id_categoria"] or item["categoria"]),
+                    "nombre": item["categoria"],
                     "categoria": item["categoria"],
                     "id_categoria": item["id_categoria"],
                     "total_productos": item["total_productos"],
+                    "cantidad": float(cant),
                     "cantidad_total": float(cant),
                     "costo_promedio": costo_prom,
+                    "valor": float(val),
                     "valor_total": float(val),
                 })
 
@@ -81,9 +85,13 @@ def reporte_valorizacion():
             filas = repo.obtener_valorizacion_por_bodega(cursor, id_bodega=id_bodega)
             datos = [
                 {
+                    "clave": str(fila["id_bodega"]),
+                    "nombre": f"Bodega {fila['id_bodega']}",
                     "id_bodega": fila["id_bodega"],
                     "total_productos": fila["total_productos"],
+                    "cantidad": float(fila["cantidad_total"]),
                     "cantidad_total": float(fila["cantidad_total"]),
+                    "valor": float(fila["valor_total"]),
                     "valor_total": float(fila["valor_total"]),
                 }
                 for fila in filas
@@ -102,12 +110,14 @@ def reporte_valorizacion():
                 sku = fila["sku"]
                 info = catalogo.get(sku, {})
                 datos.append({
+                    "clave": f"{sku}-{fila['id_bodega']}",
                     "sku": sku,
                     "nombre": info.get("nombre", sku),
                     "categoria": info.get("categoria_nombre", "Sin categoría"),
                     "id_bodega": fila["id_bodega"],
                     "cantidad": float(fila["cantidad"]),
                     "costo_promedio": float(fila["costo_promedio"]),
+                    "valor": float(fila["valor_total"]),
                     "valor_total": float(fila["valor_total"]),
                     "actualizado_en": fila["actualizado_en"],
                 })
@@ -176,12 +186,15 @@ def reporte_rotacion():
     for f in filas:
         sku = f["sku"]
         info = catalogo.get(sku, {})
+        salidas = float(f["total_salidas"])
         lista_productos.append({
             "sku": sku,
             "nombre": info.get("nombre", sku),
             "categoria": info.get("categoria_nombre", "Sin categoría"),
             "total_entradas": float(f["total_entradas"]),
-            "total_salidas": float(f["total_salidas"]),
+            "total_salidas": salidas,
+            "unidades_salida": salidas,
+            "rotacion": salidas,
         })
 
     mayor_rotacion = sorted(
@@ -295,8 +308,15 @@ def reporte_stock_bajo():
 
 @reportes_bp.get("/dashboard")
 def dashboard():
+    errores = Errores()
+    id_bodega = entero_opcional(errores, request.args, "id_bodega", minimo=1)
+    errores.lanzar_si_hay()
+
     with transaccion() as cursor:
-        metricas = repo.obtener_metricas_dashboard(cursor)
+        if id_bodega is not None:
+            metricas = repo.obtener_metricas_dashboard(cursor, id_bodega=id_bodega)
+        else:
+            metricas = repo.obtener_metricas_dashboard(cursor)
 
     catalogo = obtener_catalogo_productos(requerido=False)
 
@@ -304,24 +324,30 @@ def dashboard():
     for item in metricas["mayor_rotacion"]:
         sku = item["sku"]
         info = catalogo.get(sku, {})
+        salidas = float(item["total_salidas"])
         mayor_enriquecida.append({
             "sku": sku,
             "nombre": info.get("nombre", sku),
             "categoria": info.get("categoria_nombre", "Sin categoría"),
             "total_entradas": float(item["total_entradas"]),
-            "total_salidas": float(item["total_salidas"]),
+            "total_salidas": salidas,
+            "unidades_salida": salidas,
+            "rotacion": salidas,
         })
 
     menor_enriquecida = []
     for item in metricas["menor_rotacion"]:
         sku = item["sku"]
         info = catalogo.get(sku, {})
+        salidas = float(item["total_salidas"])
         menor_enriquecida.append({
             "sku": sku,
             "nombre": info.get("nombre", sku),
             "categoria": info.get("categoria_nombre", "Sin categoría"),
             "total_entradas": float(item["total_entradas"]),
-            "total_salidas": float(item["total_salidas"]),
+            "total_salidas": salidas,
+            "unidades_salida": salidas,
+            "rotacion": salidas,
         })
 
     return jsonify({

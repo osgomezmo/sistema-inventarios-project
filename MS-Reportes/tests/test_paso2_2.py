@@ -6,13 +6,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.db import abrir_conexion
+from app.errors import ApiError
 from app.consumidor import procesar_mensaje_amqp
 from app.repositorios.eventos_repo import procesar_evento
 
 
 @pytest.fixture(scope="module")
 def db_conn():
-    conn = abrir_conexion()
+    try:
+        conn = abrir_conexion()
+    except ApiError:
+        pytest.skip("MySQL de desarrollo no disponible en 127.0.0.1:33065")
     yield conn
     conn.close()
 

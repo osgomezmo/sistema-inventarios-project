@@ -99,15 +99,32 @@ def obtener_alertas_stock_bajo(cursor, id_bodega=None):
     return cursor.fetchall()
 
 
-def obtener_metricas_dashboard(cursor):
+def obtener_metricas_dashboard(cursor, id_bodega=None):
     """Calcula las 5 métricas canónicas del dashboard consolidado."""
+    params_bodega = (id_bodega, id_bodega)
+
     # 1. Valor total inventario
-    cursor.execute("SELECT COALESCE(SUM(valor_total), 0) AS total FROM saldo_reporte")
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(valor_total), 0) AS total
+        FROM saldo_reporte
+        WHERE (%s IS NULL OR id_bodega = %s)
+        """,
+        params_bodega,
+    )
     fila_valor = cursor.fetchone()
     valor_total = float(fila_valor["total"]) if fila_valor else 0.0
 
     # 2. Productos en stock bajo (activos)
-    cursor.execute("SELECT COUNT(DISTINCT sku) AS total FROM alerta_stock WHERE activa = 1")
+    cursor.execute(
+        """
+        SELECT COUNT(DISTINCT sku) AS total
+        FROM alerta_stock
+        WHERE activa = 1
+          AND (%s IS NULL OR id_bodega = %s)
+        """,
+        params_bodega,
+    )
     fila_stock = cursor.fetchone()
     productos_stock_bajo = int(fila_stock["total"]) if fila_stock else 0
 
@@ -130,10 +147,12 @@ def obtener_metricas_dashboard(cursor):
             COALESCE(SUM(entradas), 0) AS total_entradas,
             COALESCE(SUM(salidas), 0) AS total_salidas
         FROM movimiento_diario
+        WHERE (%s IS NULL OR id_bodega = %s)
         GROUP BY sku
         ORDER BY total_salidas DESC, total_entradas DESC
         LIMIT 5
-        """
+        """,
+        params_bodega,
     )
     mayor_rotacion = cursor.fetchall()
 
@@ -144,10 +163,12 @@ def obtener_metricas_dashboard(cursor):
             COALESCE(SUM(entradas), 0) AS total_entradas,
             COALESCE(SUM(salidas), 0) AS total_salidas
         FROM movimiento_diario
+        WHERE (%s IS NULL OR id_bodega = %s)
         GROUP BY sku
         ORDER BY total_salidas ASC, total_entradas ASC
         LIMIT 5
-        """
+        """,
+        params_bodega,
     )
     menor_rotacion = cursor.fetchall()
 

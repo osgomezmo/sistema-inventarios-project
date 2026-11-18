@@ -32,6 +32,8 @@ services:
     restart: unless-stopped
     environment:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      INICIAR_CONSUMIDOR: "0"
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_NAME: ${DB_NAME:-ms_reportes}
@@ -55,8 +57,12 @@ services:
     container_name: ms-reportes-consumidor
     restart: unless-stopped
     command: ["python", "consumidor.py"]
+    healthcheck:
+      disable: true
     environment:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      MIGRAR_BASE: "0"
+      SEMBRAR_DATOS: "0"
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_NAME: ${DB_NAME:-ms_reportes}
