@@ -1,12 +1,15 @@
 name: Deploy Microservices to sw2
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - closed
 
 jobs:
   deploy:
+    if: github.event.pull_request.merged == true
     name: Desplegar cambios en VM Debian
     runs-on: ubuntu-latest
 
@@ -23,4 +26,3 @@ jobs:
             git pull origin main
             docker compose up -d --build
             docker image prune -f
-          
