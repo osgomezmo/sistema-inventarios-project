@@ -1,12 +1,16 @@
 name: Deploy Microservices to sw2
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - closed
+  workflow_dispatch:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     name: Desplegar cambios en VM Debian
     runs-on: ubuntu-latest
 
@@ -17,10 +21,10 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
           script_stop: true
           script: |
             cd ~/${{ github.event.repository.name }}
             git pull origin main
             docker compose up -d --build
             docker image prune -f
-          

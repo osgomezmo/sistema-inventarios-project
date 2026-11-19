@@ -4,47 +4,55 @@ services:
     image: ms-inventario:dev
     container_name: ms-inventario-app
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
-      # Dentro de la red de Compose, MySQL se alcanza por el nombre del servicio
-      # y por su puerto interno.
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
       DB_HOST: mysql
       DB_PORT: "3306"
-      # ms-productos por su alias en la red compartida redapi (D40)
-      PRODUCTOS_URL: http://ms-productos:5000
-      # Broker de infra/rabbitmq, conectado a redapi (D48)
-      RABBITMQ_HOST: rabbitmq-inventario
+      DB_NAME: ${DB_NAME:-ms_inventario}
+      DB_USER: ${DB_USER:-ms_inventario}
+      DB_PASSWORD: ${DB_PASSWORD:-inventario_secret_2026}
+      PRODUCTOS_URL: ${PRODUCTOS_URL:-http://ms-productos:5000}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq-inventario}
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
     ports:
-      - "127.0.0.1:5002:5000"
+      - "5002:5000"
     depends_on:
       mysql:
         condition: service_healthy
     networks:
       default:
       redapi:
-        # Otros servicios lo alcanzan por este nombre (D40)
         aliases:
           - ms-inventario
 
-  # Consumidor de q.inventario: misma imagen, otro comando (D49)
   consumidor:
     build: .
     image: ms-inventario:dev
     container_name: ms-inventario-consumidor
+    restart: unless-stopped
     command: ["python", "-m", "app.consumidor"]
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
       DB_HOST: mysql
       DB_PORT: "3306"
-      # Solo la app migra y siembra (D51)
+      DB_NAME: ${DB_NAME:-ms_inventario}
+      DB_USER: ${DB_USER:-ms_inventario}
+      DB_PASSWORD: ${DB_PASSWORD:-inventario_secret_2026}
       MIGRAR_BASE: "0"
       SEMBRAR_DATOS: "0"
-      PRODUCTOS_URL: http://ms-productos:5000
-      RABBITMQ_HOST: rabbitmq-inventario
+      PRODUCTOS_URL: ${PRODUCTOS_URL:-http://ms-productos:5000}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq-inventario}
     depends_on:
       mysql:
         condition: service_healthy
-    restart: unless-stopped
     networks:
       default:
       redapi:
@@ -53,28 +61,27 @@ services:
     image: mysql:8.4
     container_name: ms-inventario-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
-      MYSQL_DATABASE: ${DB_NAME:?falta DB_NAME en .env}
-      MYSQL_USER: ${DB_USER:?falta DB_USER en .env}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+      MYSQL_DATABASE: ${DB_NAME:-ms_inventario}
+      MYSQL_USER: ${DB_USER:-ms_inventario}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-inventario_secret_2026}
     ports:
       - "127.0.0.1:33062:3306"
     volumes:
       - ms_inventario_mysql:/var/lib/mysql
     healthcheck:
-      # Usuario de la aplicación: la contraseña de root es aleatoria. Se usa TCP
-      # para no dar por sano el servidor temporal de la inicialización.
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
 volumes:
   ms_inventario_mysql:
 
 networks:
-  # Red compartida entre servicios; se crea una vez: docker network create redapi
   redapi:
-    external: true
+    name: redapi
+    driver: bridge

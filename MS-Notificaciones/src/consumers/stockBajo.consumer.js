@@ -31,7 +31,8 @@ async function procesarMensajeStockBajo(payload) {
     throw new Error('Payload de StockBajoUmbral inválido o corrupto');
   }
 
-  const { sku, id_bodega, saldo, stock_minimo } = datos;
+  const { sku, saldo, stock_minimo } = datos;
+  const id_bodega = datos.id_bodega !== undefined ? datos.id_bodega : datos.bodega;
 
   if (!sku || typeof sku !== 'string' || !sku.trim()) {
     throw new Error('Payload de StockBajoUmbral inválido o corrupto');
@@ -99,6 +100,7 @@ async function procesarMensajeStockBajo(payload) {
   const mensaje = `El producto ${skuLimpio} en bodega ${numBodega} tiene un saldo de ${numSaldo}, inferior al mínimo requerido de ${numMinimo}.`;
   const datosPush = {
     sku: skuLimpio,
+    bodega: numBodega,
     id_bodega: numBodega,
     saldo: numSaldo,
     stock_minimo: numMinimo,
@@ -186,8 +188,9 @@ async function iniciarConsumidor() {
             `[CONSUMIDOR-AMQP] Error procesando mensaje (Correlación: ${idCorrelacion}): ${err.message}`
           );
           // Rechazo con requeue = true:
-          // RabbitMQ reintenta hasta delivery-limit = 3 y lo enruta al Dead Letter Exchange
-          canal.nack(msg, false, true);
+          // En colas Quorum de RabbitMQ, channel.reject(msg, true) incrementa x-delivery-count
+          // para que al alcanzar x-delivery-limit (3) RabbitMQ lo transfiera a q.notificaciones.errores
+          canal.reject(msg, true);
         }
       },
       { noAck: false }

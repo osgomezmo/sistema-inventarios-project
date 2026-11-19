@@ -11,15 +11,11 @@ Formato para presentacion de trabajos ASI - Word.docx
 # Guía técnica de estudio personal para la sustentación (no se versiona)
 docs/Guia_tecnica_sistema_inventarios.md
 
-# Configuración local de Claude Code (personal de cada integrante)
-.claude/settings.local.json
-.claude/hooks/
-
-# Skills y subagentes de Claude Code instalados por cada integrante (Impeccable, Frontend Design, etc.)
-.claude/skills/
-.claude/agents/
-
-# Archivos de trabajo de la skill Impeccable (bocetos, capturas, contrato de dirección y sistema de diseño)
+# Configuración, skills, hooks y soporte local de asistentes/agentes de IA (no se versiona)
+.claude/
+.agents/
+.gemini/
+.cursor/
 .impeccable/
 /PRODUCT.md
 /DESIGN.md
