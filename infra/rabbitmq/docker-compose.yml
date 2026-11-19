@@ -2,12 +2,14 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq-inventario
+    hostname: rabbitmq-inventario
     restart: unless-stopped
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-inventario}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-inventario_secret}
@@ -18,9 +20,9 @@ services:
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      timeout: 15s
+      retries: 20
+      start_period: 60s
     networks:
       default:
       redapi:
@@ -33,4 +35,5 @@ volumes:
 
 networks:
   redapi:
-    external: true
+    name: redapi
+    driver: bridge

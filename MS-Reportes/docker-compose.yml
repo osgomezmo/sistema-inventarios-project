@@ -17,9 +17,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     networks:
       - redapi
 
@@ -30,8 +30,11 @@ services:
     image: ms-reportes:dev
     container_name: ms-reportes-app
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment:
-      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
       INICIAR_CONSUMIDOR: "0"
       SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
       DB_HOST: mysql
@@ -42,12 +45,15 @@ services:
       PRODUCTOS_URL: ${PRODUCTOS_URL:-http://ms-productos:5000}
       RABBITMQ_URL: ${RABBITMQ_URL:-amqp://inventario:inventario_secret@rabbitmq-inventario:5672/%2F}
     ports:
-      - "127.0.0.1:5005:5000"
+      - "5005:5000"
     depends_on:
       mysql:
         condition: service_healthy
     networks:
-      - redapi
+      default:
+      redapi:
+        aliases:
+          - ms-reportes
 
   consumidor:
     build:
@@ -59,8 +65,11 @@ services:
     command: ["python", "consumidor.py"]
     healthcheck:
       disable: true
+    env_file:
+      - path: .env
+        required: false
     environment:
-      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-secreto-gateway-2026}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
       MIGRAR_BASE: "0"
       SEMBRAR_DATOS: "0"
       DB_HOST: mysql
@@ -73,7 +82,8 @@ services:
       mysql:
         condition: service_healthy
     networks:
-      - redapi
+      default:
+      redapi:
 
 volumes:
   ms_reportes_mysql:
