@@ -4,21 +4,41 @@ services:
     image: api-gateway:dev
     container_name: api-gateway-app
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
-      # Dentro de la red de Compose, MySQL se alcanza por el nombre del servicio
-      # y por su puerto interno.
+      APP_NAME: ${APP_NAME:-Sistema de Inventarios}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:-base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE:-gateway}
+      DB_USERNAME: ${DB_USERNAME:-gateway}
+      DB_PASSWORD: ${DB_PASSWORD:-gateway_secret_2026}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
+      PRODUCTOS_URL: ${PRODUCTOS_URL:-http://ms-productos:5000}
+      INVENTARIO_URL: ${INVENTARIO_URL:-http://ms-inventario:5000}
+      PROVEEDORES_URL: ${PROVEEDORES_URL:-http://ms-proveedores:3001}
+      COMPRAS_URL: ${COMPRAS_URL:-http://ms-compras:5000}
+      REPORTES_URL: ${REPORTES_URL:-http://ms-reportes:5000}
+      NOTIFICACIONES_URL: ${NOTIFICACIONES_URL:-http://ms-notificaciones:5006}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@inventario.local}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE:-Administrador}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Inventario2026}
+      USUARIOS_INICIALES_PASSWORD: ${USUARIOS_INICIALES_PASSWORD:-Inventario2026}
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
     ports:
-      - "127.0.0.1:8000:80"
+      - "8000:80"
     depends_on:
       mysql:
         condition: service_healthy
     networks:
       default:
       redapi:
-        # Los microservicios y el front lo alcanzan por este nombre
         aliases:
           - api-gateway
 
@@ -26,28 +46,27 @@ services:
     image: mysql:8.4
     container_name: api-gateway-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
-      MYSQL_DATABASE: ${DB_DATABASE:?falta DB_DATABASE en .env}
-      MYSQL_USER: ${DB_USERNAME:?falta DB_USERNAME en .env}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+      MYSQL_DATABASE: ${DB_DATABASE:-gateway}
+      MYSQL_USER: ${DB_USERNAME:-gateway}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-gateway_secret_2026}
     ports:
       - "127.0.0.1:33066:3306"
     volumes:
       - gateway_mysql:/var/lib/mysql
     healthcheck:
-      # Usuario de la aplicación: la contraseña de root es aleatoria. Se usa TCP
-      # para no dar por sano el servidor temporal de la inicialización.
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
 volumes:
   gateway_mysql:
 
 networks:
-  # Red compartida entre servicios; se crea una vez: docker network create redapi
   redapi:
-    external: true
+    name: redapi
+    driver: bridge

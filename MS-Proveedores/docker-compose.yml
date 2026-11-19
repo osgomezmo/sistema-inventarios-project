@@ -4,13 +4,20 @@ services:
     image: ms-proveedores:dev
     container_name: ms-proveedores-app
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
+      PORT: "3001"
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-token-servicio-inventarios-2026-vm}
       DB_HOST: mysql
       DB_PORT: "3306"
-      PORT: "3001"
+      DB_NAME: ${DB_NAME:-proveedores}
+      DB_USER: ${DB_USER:-proveedores_user}
+      DB_PASSWORD: ${DB_PASSWORD:-proveedores_secret_2026}
+      SEMBRAR_DATOS: ${SEMBRAR_DATOS:-1}
     ports:
-      - "127.0.0.1:5003:3001"
+      - "5003:3001"
     depends_on:
       mysql:
         condition: service_healthy
@@ -24,11 +31,12 @@ services:
     image: mysql:8.4
     container_name: ms-proveedores-mysql
     restart: unless-stopped
+    command: --innodb-buffer-pool-size=32M --performance-schema=OFF --max-connections=50
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
-      MYSQL_DATABASE: ${DB_NAME:?falta DB_NAME en .env}
-      MYSQL_USER: ${DB_USER:?falta DB_USER en .env}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+      MYSQL_DATABASE: ${DB_NAME:-proveedores}
+      MYSQL_USER: ${DB_USER:-proveedores_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-proveedores_secret_2026}
     ports:
       - "127.0.0.1:33063:3306"
     volumes:
@@ -36,13 +44,14 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
 volumes:
   ms_proveedores_mysql:
 
 networks:
   redapi:
-    external: true
+    name: redapi
+    driver: bridge
