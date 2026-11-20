@@ -8,8 +8,9 @@ Formato para presentacion de trabajos ASI - Word.docx
 # Archivos temporales que crea Word mientras un documento está abierto
 ~$*
 
-# Guía técnica de estudio personal para la sustentación (no se versiona)
+# Guías técnicas de estudio personal para la sustentación (no se versionan)
 docs/Guia_tecnica_sistema_inventarios.md
+docs/Guia_estudio_completa_herramientas_arquitectura.md
 
 # Configuración, skills, hooks y soporte local de asistentes/agentes de IA (no se versiona)
 .claude/
