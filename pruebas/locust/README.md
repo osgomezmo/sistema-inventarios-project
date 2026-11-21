@@ -49,7 +49,7 @@ Se necesitan Docker (con Docker Compose) y Python 3.12. Todos los comandos se es
 
    ```bash
    git clone https://github.com/osgomezmo/sistema-inventarios-project.git
-   cd <carpeta-del-repositorio>
+   cd sistema-inventarios-project
    git checkout daniel
    ```
 
