@@ -48,7 +48,7 @@ Se necesitan Docker (con Docker Compose) y Python 3.12. Todos los comandos se es
 1. **Clonar el repositorio** y entrar en la rama del proyecto:
 
    ```bash
-   git clone <url-del-repositorio>
+   git clone https://github.com/osgomezmo/sistema-inventarios-project.git
    cd <carpeta-del-repositorio>
    git checkout daniel
    ```
