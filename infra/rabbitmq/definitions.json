@@ -1,8 +1,27 @@
 {
   "rabbit_version": "4.0.0",
+  "users": [
+    {
+      "name": "inventario",
+      "password_hash": "NuCByiwactfdPCKP8Hxiigg1IMQvSWkx7QmCe05lbbxysrFN",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [
+        "administrator"
+      ]
+    }
+  ],
   "vhosts": [
     {
       "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "inventario",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
     }
   ],
   "exchanges": [
