@@ -4,8 +4,9 @@ B1 GET /api/auth/me (solo gateway)         B2 GET /api/productos?q= (ms-producto
 B3 GET /api/stock/{sku} (ms-inventario)    B4 POST /api/movimientos (SALIDA)
 B5 POST /api/traslados                     B6 GET /api/kardex
 
-Cada prueba se corre sola con su etiqueta (--tags b1 ... b6); ejecutar.sh fija
-los parámetros de cada escenario. El token se obtiene UNA vez en test_start con
+Cada prueba es una clase de usuario (B1AuthMe ... B6Kardex), para elegirla en la
+interfaz web (interfaz.py, con --class-picker), y conserva su etiqueta (--tags b1
+... b6), que usa ejecutar.sh en las corridas sin interfaz. El token se obtiene UNA vez en test_start con
 el usuario de pruebas/locust/.env y lo comparten todos los usuarios virtuales
 (el login del gateway admite 5 intentos por minuto). Cualquier respuesta que no
 sea la esperada, incluido un 409, cuenta como error.
@@ -46,6 +47,10 @@ def leer_env(ruta):
 @events.test_start.add_listener
 def iniciar(environment, **_):
     """Inicia sesión una sola vez y busca los ids de las bodegas LT."""
+    # Con --tags (ejecutar.sh), Locust filtra las tareas justo antes de este evento:
+    # se quitan las clases que quedaron vacías, que fallarían al crearse.
+    if environment.parsed_options and getattr(environment.parsed_options, "tags", None):
+        environment.user_classes[:] = [clase for clase in environment.user_classes if clase.tasks]
     env = leer_env(AQUI / ".env")
     if not env.get("LT_EMAIL") or not env.get("LT_PASSWORD"):
         raise SystemExit("Falta pruebas/locust/.env: ejecuta preparar_datos.py")
@@ -72,7 +77,10 @@ def terminar(environment, **_):
         contexto["token"] = None
 
 
-class UsuarioBodega(HttpUser):
+class UsuarioBloqueB(HttpUser):
+    """Base común: pausa, bodegas LT y cabeceras. No se ejecuta sola."""
+
+    abstract = True
     wait_time = between(*PAUSA)
 
     def on_start(self):
@@ -83,26 +91,42 @@ class UsuarioBodega(HttpUser):
     def cabeceras(self):
         return {"Authorization": f"Bearer {contexto['token']}", "X-Correlation-Id": f"lt-{uuid.uuid4()}"}
 
+
+class B1AuthMe(UsuarioBloqueB):
+    """B1: usuario actual; solo el gateway."""
+
     @tag("b1")
     @task
-    def b1_usuario_actual(self):
+    def usuario_actual(self):
         self.client.get("/api/auth/me", headers=self.cabeceras(), name="B1 GET /api/auth/me")
+
+
+class B2Productos(UsuarioBloqueB):
+    """B2: búsqueda de productos; gateway y ms-productos."""
 
     @tag("b2")
     @task
-    def b2_buscar_productos(self):
+    def buscar_productos(self):
         self.client.get("/api/productos", params={"q": random.choice(TERMINOS)}, headers=self.cabeceras(),
                         name="B2 GET /api/productos?q=")
 
+
+class B3Stock(UsuarioBloqueB):
+    """B3: saldo consolidado de un SKU; gateway y ms-inventario."""
+
     @tag("b3")
     @task
-    def b3_stock_por_sku(self):
+    def stock_por_sku(self):
         self.client.get(f"/api/stock/{random.choice(SKUS)}", headers=self.cabeceras(),
                         name="B3 GET /api/stock/{sku}")
 
+
+class B4Movimientos(UsuarioBloqueB):
+    """B4: salida de 1 unidad; gateway, ms-inventario, ms-productos y RabbitMQ."""
+
     @tag("b4")
     @task
-    def b4_salida(self):
+    def salida(self):
         cuerpo = {"sku": random.choice(SKUS_GRANDES), "id_bodega": random.choice((self.b1, self.b2)),
                   "tipo": "SALIDA", "cantidad": 1, "motivo": "Prueba de rendimiento LT"}
         with self.client.post("/api/movimientos", json=cuerpo, headers=self.cabeceras(),
@@ -110,9 +134,13 @@ class UsuarioBodega(HttpUser):
             if r.status_code != 201:
                 r.failure(f"HTTP {r.status_code}")
 
+
+class B5Traslados(UsuarioBloqueB):
+    """B5: traslado de 1 unidad entre LT-B1 y LT-B2, alternando el sentido."""
+
     @tag("b5")
     @task
-    def b5_traslado(self):
+    def traslado(self):
         origen, destino = (self.b1, self.b2) if self.hacia_b2 else (self.b2, self.b1)
         self.hacia_b2 = not self.hacia_b2  # alterna el sentido
         cuerpo = {"sku": random.choice(SKUS_GRANDES), "id_bodega_origen": origen,
@@ -122,9 +150,13 @@ class UsuarioBodega(HttpUser):
             if r.status_code != 201:
                 r.failure(f"HTTP {r.status_code}")
 
+
+class B6Kardex(UsuarioBloqueB):
+    """B6: kardex del día de LT-0001 en LT-B1; gateway y ms-inventario."""
+
     @tag("b6")
     @task
-    def b6_kardex(self):
+    def kardex(self):
         hoy = datetime.now(ZoneInfo("America/Bogota")).date().isoformat()
         self.client.get("/api/kardex", params={"sku": SKU_KARDEX, "id_bodega": self.b1, "desde": hoy, "hasta": hoy},
                         headers=self.cabeceras(), name="B6 GET /api/kardex")
