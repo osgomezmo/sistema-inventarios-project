@@ -619,7 +619,7 @@ Cómo se podría mejorar:
 **Otras limitaciones medidas** (ver [pruebas/resultados/resumen.md](pruebas/resultados/resumen.md)):
 
 - Conexiones de la base del gateway: en las pruebas de estrés, las lecturas empiezan a fallar con errores 500 desde unos 80 usuarios. La base del gateway acepta como máximo 50 conexiones (`--max-connections=50`), mientras que su Apache puede atender hasta 150 peticiones a la vez.
-- Un solo worker de Gunicorn: ms-productos e ms-inventario arrancan Gunicorn sin indicar `--workers`, así que atienden con un solo proceso. Las escrituras de inventario (salidas y traslados) son las más lentas y ya fallan con 50 usuarios (errores 503 en B4-P y B5-P).
+- Un solo worker de Gunicorn: ms-productos y ms-inventario arrancan Gunicorn sin indicar `--workers`, así que atienden con un solo proceso. Las escrituras de inventario (salidas y traslados) son las más lentas y ya fallan con 50 usuarios (errores 503 en B4-P y B5-P).
 
 ---
 
