@@ -521,6 +521,52 @@ services:
         aliases:
           - front-end
 
+  # ----------------------------------------------------------------------------
+  # 10. Pruebas de rendimiento (Locust, bloque B). Solo con el perfil "pruebas":
+  #     docker compose --profile pruebas up -d --build
+  #     Interfaz web en http://127.0.0.1:8089
+  # ----------------------------------------------------------------------------
+  locust:
+    build:
+      context: ./pruebas/locust
+      dockerfile: Dockerfile
+    image: locust-inventarios:dev
+    container_name: locust-pruebas
+    profiles: ["pruebas"]
+    command: ["python", "interfaz.py"]
+    environment:
+      LT_HOST: "http://api-gateway"
+      LT_WEB_HOST: "0.0.0.0"
+      # Espera a que el gateway termine de arrancar (migraciones y datos iniciales)
+      LT_ESPERA_GATEWAY: "180"
+      LT_ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
+      LT_ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      LT_DB_PRODUCTOS_HOST: productos-mysql
+      LT_DB_PRODUCTOS_PORT: "3306"
+      LT_DB_PRODUCTOS_NAME: "${PRODUCTOS_DB_NAME:-}"
+      LT_DB_PRODUCTOS_USER: "${PRODUCTOS_DB_USER:-}"
+      LT_DB_PRODUCTOS_PASSWORD: "${PRODUCTOS_DB_PASSWORD:-}"
+      LT_DB_INVENTARIO_HOST: inventario-mysql
+      LT_DB_INVENTARIO_PORT: "3306"
+      LT_DB_INVENTARIO_NAME: "${INVENTARIO_DB_NAME:-}"
+      LT_DB_INVENTARIO_USER: "${INVENTARIO_DB_USER:-}"
+      LT_DB_INVENTARIO_PASSWORD: "${INVENTARIO_DB_PASSWORD:-}"
+      LT_DB_GATEWAY_HOST: gateway-mysql
+      LT_DB_GATEWAY_PORT: "3306"
+      LT_DB_GATEWAY_NAME: "${GATEWAY_DB_NAME:-}"
+      LT_DB_GATEWAY_USER: "${GATEWAY_DB_USER:-}"
+      LT_DB_GATEWAY_PASSWORD: "${GATEWAY_DB_PASSWORD:-}"
+    ports:
+      - "127.0.0.1:8089:8089"
+    volumes:
+      # Guarda la contraseña del usuario de prueba entre recreaciones del contenedor
+      - locust_estado:/app/estado
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks:
+      redapi:
+
 volumes:
   rabbitmq_data:
   ms_productos_mysql:
@@ -530,6 +576,7 @@ volumes:
   ms_notificaciones_data:
   ms_reportes_mysql:
   gateway_mysql:
+  locust_estado:
 
 networks:
   redapi:

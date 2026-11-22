@@ -2,8 +2,9 @@
 
 Uso: .venv/bin/python preparar_datos.py  (desde pruebas/locust/)
 
-Inicia sesión con el administrador (ADMIN_EMAIL y ADMIN_PASSWORD de gateway/.env)
-y crea, si no existen: el usuario lt.jefe@ejemplo.invalid (jefe_bodega, con su
+Inicia sesión con el administrador del gateway (LT_ADMIN_EMAIL y LT_ADMIN_PASSWORD
+o, si no están, ADMIN_EMAIL y ADMIN_PASSWORD de gateway/.env) en LT_HOST (por
+defecto http://127.0.0.1:8000) y crea, si no existen: el usuario lt.jefe@ejemplo.invalid (jefe_bodega, con su
 contraseña en pruebas/locust/.env), 20 categorías "LT Cat NN", 2000 productos
 LT-0001 a LT-2000, las bodegas LT-B1, LT-B2 y LT-B3 y los saldos iniciales.
 Es idempotente: reutiliza lo que ya existe y solo completa los saldos que falten.
@@ -166,11 +167,21 @@ def asegurar_saldos(admin, bodegas):
     print(f"saldos: {len(objetivos)} ({len(ajustes)} ajustes positivos)")
 
 
+def credenciales_admin():
+    """Administrador de LT_ADMIN_EMAIL/LT_ADMIN_PASSWORD o, si no están, de gateway/.env."""
+    email = os.getenv("LT_ADMIN_EMAIL", "").strip()
+    password = os.getenv("LT_ADMIN_PASSWORD", "").strip()
+    if not (email and password):
+        gateway_env = leer_env(RAIZ / "gateway" / ".env")
+        email, password = gateway_env.get("ADMIN_EMAIL", ""), gateway_env.get("ADMIN_PASSWORD", "")
+    if not (email and password):
+        sys.exit("Faltan las credenciales del administrador: LT_ADMIN_EMAIL y LT_ADMIN_PASSWORD, "
+                 "o ADMIN_EMAIL y ADMIN_PASSWORD en gateway/.env.")
+    return email, password
+
+
 def main():
-    gateway_env = leer_env(RAIZ / "gateway" / ".env")
-    if not gateway_env.get("ADMIN_EMAIL") or not gateway_env.get("ADMIN_PASSWORD"):
-        sys.exit("Faltan ADMIN_EMAIL o ADMIN_PASSWORD en gateway/.env")
-    admin = Gateway(gateway_env["ADMIN_EMAIL"], gateway_env["ADMIN_PASSWORD"])
+    admin = Gateway(*credenciales_admin())
     asegurar_usuario(admin)
     categorias = asegurar_categorias(admin)
     asegurar_productos(admin, categorias)

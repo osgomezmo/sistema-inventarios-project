@@ -127,6 +127,23 @@ Se necesitan Docker (con Docker Compose) y Python 3.12. Todos los comandos se es
 
    Borra los datos de prueba (prefijos `LT` y `lt.`) y deja intactos los datos iniciales.
 
+## Con el docker-compose de la raíz
+
+El `docker-compose.yml` de la raíz trae Locust como un servicio más, con el perfil `pruebas`. Corre dentro de la red interna, habla con el gateway en `http://api-gateway` y no necesita Python en la máquina. Desde la raíz del repositorio, con el `.env` de la raíz lleno (copiado de `.env.example`):
+
+```bash
+docker compose --profile pruebas up -d --build   # levanta todo, incluido Locust
+```
+
+Luego se abre http://127.0.0.1:8089, se elige una prueba (`B1AuthMe` … `B6Kardex`) y se escriben los usuarios y la tasa. La primera vez, el contenedor crea los datos de prueba; tarda unos 3 minutos y se puede seguir con `docker compose logs -f locust`.
+
+```bash
+docker compose exec locust python limpiar_datos.py   # borra los datos LT
+docker compose --profile pruebas down                # baja todo (conserva los datos)
+```
+
+Si los compose de cada servicio están arriba, hay que bajarlos antes (`docker compose down` en cada carpeta), porque usan los mismos nombres de contenedor y los mismos puertos.
+
 ## Requisitos
 
 RabbitMQ, ms-productos, ms-inventario (app y consumidor) y el gateway arriba, en la red `redapi`.
