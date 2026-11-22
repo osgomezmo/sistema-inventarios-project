@@ -10,7 +10,8 @@ Pasos:
 2. Lee el administrador de LT_ADMIN_EMAIL y LT_ADMIN_PASSWORD o, si no están, de
    ADMIN_EMAIL y ADMIN_PASSWORD en gateway/.env.
 3. Si falta el usuario de prueba o los datos LT, los crea con preparar_datos.py.
-4. Lanza Locust en http://127.0.0.1:8089 con el selector de clases: en la página se
+4. Lanza Locust en el puerto 8089 de LT_WEB_HOST (por defecto 127.0.0.1; en el
+   contenedor, 0.0.0.0) con el selector de clases: en la página se
    elige la prueba (B1AuthMe ... B6Kardex), los usuarios y la tasa.
 
 Nunca imprime contraseñas ni tokens.
@@ -19,8 +20,10 @@ Nunca imprime contraseñas ni tokens.
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -28,6 +31,8 @@ from pathlib import Path
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parent.parent
 HOST = os.getenv("LT_HOST", "http://127.0.0.1:8000").rstrip("/")
+# Dirección de la interfaz web: 127.0.0.1 en la máquina local, 0.0.0.0 en el contenedor
+HOST_WEB = os.getenv("LT_WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
 PUERTO_WEB = "8089"
 
 
@@ -61,7 +66,13 @@ def pedir(metodo, ruta, cuerpo=None, token=None):
 
 
 def comprobar_gateway():
+    # En el contenedor el gateway puede tardar en arrancar: se reintenta hasta
+    # LT_ESPERA_GATEWAY segundos (por defecto 0: se avisa de inmediato)
+    limite = time.monotonic() + float(os.getenv("LT_ESPERA_GATEWAY", "0") or 0)
     codigo, _ = pedir("GET", "/up")
+    while codigo != 200 and time.monotonic() < limite:
+        time.sleep(3)
+        codigo, _ = pedir("GET", "/up")
     if codigo != 200:
         sys.exit(
             f"El gateway no responde en {HOST} (código {codigo or 'sin respuesta'}).\n"
@@ -131,14 +142,21 @@ def lanzar_locust(estres):
     else:
         entorno.update(LT_PAUSA_MIN="1", LT_PAUSA_MAX="3")
     comando = [sys.executable, "-m", "locust", "-f", archivos, "--class-picker", "--host", HOST,
-               "--web-host", "127.0.0.1", "--web-port", PUERTO_WEB]
+               "--web-host", HOST_WEB, "--web-port", PUERTO_WEB]
     print(f"\nAbre http://127.0.0.1:{PUERTO_WEB} en el navegador y elige una prueba (B1AuthMe ... B6Kardex).")
     if estres:
         print("Modo estrés: elige también la forma FormaEstres en el selector.")
     print("Para terminar, presiona Ctrl+C en esta ventana.\n")
+    proceso = subprocess.Popen(comando, cwd=AQUI, env=entorno)
+
+    def detener(*_):
+        proceso.terminate()  # docker stop: Locust termina ordenadamente
+
+    signal.signal(signal.SIGTERM, detener)
     try:
-        return subprocess.call(comando, cwd=AQUI, env=entorno)
+        return proceso.wait()
     except KeyboardInterrupt:
+        proceso.wait()
         return 0
 
 
