@@ -494,7 +494,136 @@ docker compose up -d --build
 
 ---
 
-## 10. Documentación del proyecto
+## 10. Cómo funciona por dentro
+
+### Una base de datos por microservicio
+
+Cada microservicio guarda sus datos en su propia base, y ningún servicio lee la base de otro. Cuando un servicio necesita algo de otro, se lo pide por HTTP (siempre con el token de servicio) o se entera por un evento de RabbitMQ.
+
+| Servicio | Dónde guarda sus datos | Base (valor por defecto) |
+|---|---|---|
+| `ms-productos` | MySQL `productos-mysql` | `ms_productos` |
+| `ms-inventario` | MySQL `inventario-mysql` | `ms_inventario` |
+| `ms-compras` | MySQL `compras-mysql` | `mscompras` |
+| `ms-proveedores` | MySQL `proveedores-mysql` | `proveedores` |
+| `ms-reportes` | MySQL `reportes-mysql` | `ms_reportes` |
+| `ms-notificaciones` | Archivo local en el volumen `ms_notificaciones_data` (o Firebase, si se configura) | — |
+| `api-gateway` | MySQL `gateway-mysql` (usuarios, roles y tokens) | `gateway` |
+
+Ejemplos de consultas entre servicios: ms-inventario le pregunta a ms-productos si un SKU existe antes de registrar un movimiento, y ms-compras le pregunta a ms-proveedores por el proveedor de una orden.
+
+### Cómo se llama la API y qué cabeceras viajan
+
+```text
+Cliente ──► api-gateway ─────────────────────────────► microservicio
+            Authorization: Bearer <token de Sanctum>    Authorization: Bearer <token de servicio>
+            1. ¿el token es válido?                     X-User-Id: 7
+            2. ¿el usuario está ACTIVO?                 X-User-Role: jefe_bodega
+            3. ¿su rol tiene el permiso de esa ruta?    X-Correlation-Id: 6f1c2a9e-...
+```
+
+El cliente (la página web o curl) manda una sola cabecera: `Authorization: Bearer <token>`, con el token que recibió al iniciar sesión. El gateway revisa tres cosas: que el token sea válido (Sanctum), que el usuario siga `ACTIVO` y que su rol tenga el permiso que exige la ruta. Si algo falla, responde 401 o 403 y la petición no llega al microservicio.
+
+Si todo está bien, el gateway arma una petición nueva hacia el microservicio con estas cabeceras:
+
+| Cabecera | Para qué sirve |
+|---|---|
+| `Authorization: Bearer <token de servicio>` | Demuestra que la petición viene del gateway. Es el mismo valor (`SERVICE_TOKEN`) en el gateway y en todos los microservicios. |
+| `X-User-Id` | Quién hizo la operación. ms-inventario lo guarda en cada movimiento, para saber quién lo registró. |
+| `X-User-Role` | El rol del usuario: `admin`, `jefe_bodega`, `compras` o `gerente`. |
+| `X-Correlation-Id` | Un identificador de la petición. Viaja también en los eventos, para seguir una operación en los logs de todos los servicios. |
+
+El gateway no reenvía las cabeceras del cliente: arma las suyas desde cero. Si el cliente manda un `X-User-Id` o un `X-User-Role` inventados, se descartan. La única que conserva es un `X-Correlation-Id` válido (letras, números y guiones, hasta 64 caracteres); si no viene o no es válido, genera uno nuevo.
+
+Los seis microservicios responden 401 a cualquier petición que no traiga el token de servicio. Sus puertos solo se publican en `127.0.0.1` y, sin ese token, no se pueden usar directamente: todo pasa por el gateway.
+
+### Cómo manejamos los eventos
+
+Los servicios se avisan cosas a través de RabbitMQ, en el exchange `inventario.eventos`, de tipo *topic*. La routing key de cada mensaje es el nombre del evento, y cada cola recibe solo los eventos que le interesan.
+
+Todos los mensajes tienen el mismo sobre:
+
+```json
+{
+  "id_evento": "6f1c2a9e-1b7d-4c55-9a51-3f0e8d2b7c10",
+  "tipo": "MovimientoRegistrado",
+  "fecha": "2026-11-22T14:32:05Z",
+  "productor": "ms-inventario",
+  "id_correlacion": "c1f4b8e2-77a0-4d1e-9a3b-0c5d6e7f8a90",
+  "datos": { "...": "lo propio de cada evento" }
+}
+```
+
+| Evento | Lo publica | Lo consume (cola) | Cuándo |
+|---|---|---|---|
+| `MercanciaRecibida` | ms-compras | ms-inventario (`q.inventario`) | Se recibe mercancía de una orden: ms-inventario la suma al stock. |
+| `DevolucionProveedorRegistrada` | ms-compras | ms-inventario (`q.inventario`) | Se devuelve mercancía al proveedor: ms-inventario la descuenta. |
+| `MovimientoRegistrado` | ms-inventario | ms-reportes (`q.reportes`) | Cada movimiento de inventario. |
+| `OrdenCompraActualizada` | ms-compras | ms-reportes (`q.reportes`) | Una orden se crea, se edita, se aprueba, se anula o se recibe. |
+| `StockBajoUmbral` | ms-inventario | ms-reportes y ms-notificaciones (`q.reportes` y `q.notificaciones`) | Un saldo que estaba por encima de su stock mínimo queda en el mínimo o por debajo. |
+
+Cómo se procesa un mensaje:
+
+- **Confirmación manual.** El consumidor confirma el mensaje (*ack*) solo después de guardar su efecto. Si falla, lo rechaza y RabbitMQ lo vuelve a entregar.
+- **Tres intentos.** Las colas `q.inventario`, `q.reportes` y `q.notificaciones` tienen un límite de 3 entregas (`x-delivery-limit`). Al superarlo, el mensaje pasa a su cola `.errores` (por ejemplo, `q.inventario.errores`) para revisarlo a mano. ms-inventario además cuenta los intentos él mismo con la cabecera `x-acquired-count` y, desde el tercero, rechaza sin reentrega para que el mensaje llegue a `q.inventario.errores`.
+- **Después de guardar.** En ms-inventario, el evento se publica después de confirmar la transacción en la base. Si el movimiento no se guarda, no se avisa nada.
+
+### Idempotencia: no aplicar dos veces el mismo evento
+
+RabbitMQ puede entregar un mismo mensaje más de una vez; por ejemplo, si el consumidor se cae justo después de guardar y antes de confirmar. Si ms-inventario aplicara dos veces una `MercanciaRecibida`, el stock quedaría duplicado.
+
+Para evitarlo, cada consumidor anota el `id_evento` de los mensajes que ya procesó:
+
+| Servicio | Dónde anota los eventos procesados |
+|---|---|
+| ms-inventario | Tabla `eventos_procesados` |
+| ms-reportes | Tabla `evento_procesado` |
+| ms-notificaciones | Lista `eventos_procesados` en su archivo de datos (o la colección del mismo nombre en Firebase) |
+
+El `id_evento` se guarda en la misma transacción que el cambio (en ms-notificaciones, en la misma escritura del archivo). Si llega un mensaje con un `id_evento` que ya está anotado, se confirma sin aplicarlo otra vez.
+
+### Healthchecks: cuándo un contenedor está listo de verdad
+
+Un contenedor "encendido" no siempre está listo. MySQL, por ejemplo, tarda varios segundos en aceptar conexiones después de arrancar. Por eso varios contenedores tienen un *healthcheck*: un comando que Docker ejecuta cada cierto tiempo para saber si el servicio responde.
+
+| Contenedores | Comando | interval | timeout | retries | start_period |
+|---|---|---|---|---|---|
+| Las 6 bases MySQL | `mysqladmin ping` con el usuario de la base | 5 s | 10 s | 30 | 60 s |
+| RabbitMQ | `rabbitmq-diagnostics -q ping` | 10 s | 15 s | 20 | 60 s |
+| ms-reportes (en su Dockerfile) | Abre `http://127.0.0.1:5000/health` | 10 s | 5 s | 3 | 10 s |
+| ms-notificaciones (en su Dockerfile) | Abre `http://127.0.0.1:5006/health` | 10 s | 5 s | 3 | 10 s |
+| front-end (en su Dockerfile) | Abre `http://127.0.0.1/salud` | 30 s | 3 s | 3 | 5 s |
+
+Qué significa cada valor:
+
+- **interval:** cada cuánto se ejecuta el comando.
+- **timeout:** cuánto se espera la respuesta antes de darlo por fallido.
+- **retries:** cuántos fallos seguidos hacen falta para marcar el contenedor como `unhealthy`.
+- **start_period:** tiempo de gracia al arrancar; los fallos de ese periodo no cuentan.
+
+Los servicios usan `depends_on` con `condition: service_healthy` para esperar a su base y, si la usan, a RabbitMQ. Por ejemplo, ms-inventario no arranca hasta que `inventario-mysql` y `rabbitmq` están `healthy`, no solo encendidos. Así, cuando el servicio crea sus tablas y carga sus datos iniciales, la base ya acepta conexiones. Las dependencias entre aplicaciones (por ejemplo, el gateway con los microservicios) solo esperan a que el contenedor haya arrancado (`service_started`).
+
+### Limitaciones conocidas
+
+**Dependencia de RabbitMQ.** Esto es lo que pasa según el código si RabbitMQ se cae:
+
+- **ms-inventario:** los movimientos, traslados y devoluciones de clientes se siguen registrando, porque el evento se publica después de guardar. Si la publicación falla, solo queda un aviso en el log y el evento se pierde: ms-reportes no se entera del movimiento y ms-notificaciones no recibe las alertas de stock bajo de ese momento.
+- **ms-compras:** publica sus eventos dentro de la misma transacción en que guarda. Si RabbitMQ no responde, la operación se deshace y responde 503 (`SERVICIO_NO_DISPONIBLE`). Mientras RabbitMQ esté caído no se pueden crear, editar, aprobar, anular ni recibir órdenes, ni registrar devoluciones a proveedor. A cambio, ms-inventario nunca se queda sin enterarse de una recepción guardada.
+- **Consumidores** (ms-inventario, ms-reportes y ms-notificaciones): pierden la conexión y reintentan conectarse solos cada pocos segundos (5 s en ms-inventario y ms-notificaciones, 3 s en ms-reportes). Cuando RabbitMQ vuelve, siguen con lo que haya quedado en sus colas.
+
+Cómo se podría mejorar:
+
+- Guardar en ms-inventario los eventos que no se pudieron publicar en una tabla de pendientes y reenviarlos después (el patrón *outbox*: el evento se escribe en la base, en la misma transacción que el cambio, y un proceso aparte lo publica).
+- Correr RabbitMQ en clúster de varios nodos, para que la caída de uno no detenga la mensajería.
+
+**Otras limitaciones medidas** (ver [pruebas/resultados/resumen.md](pruebas/resultados/resumen.md)):
+
+- Conexiones de la base del gateway: en las pruebas de estrés, las lecturas empiezan a fallar con errores 500 desde unos 80 usuarios. La base del gateway acepta como máximo 50 conexiones (`--max-connections=50`), mientras que su Apache puede atender hasta 150 peticiones a la vez.
+- Un solo worker de Gunicorn: ms-productos e ms-inventario arrancan Gunicorn sin indicar `--workers`, así que atienden con un solo proceso. Las escrituras de inventario (salidas y traslados) son las más lentas y ya fallan con 50 usuarios (errores 503 en B4-P y B5-P).
+
+---
+
+## 11. Documentación del proyecto
 
 **Entregas:**
 
@@ -513,3 +642,19 @@ docker compose up -d --build
 - [Interfaz web](front-end/README.md)
 - [Kubernetes](infra/k8s/README.md)
 - [Pruebas de rendimiento](pruebas/locust/README.md)
+
+---
+
+## 12. Despliegue en la nube (Google Cloud)
+
+Además de correrlo en local, el equipo desplegó el sistema en una máquina virtual con Debian en Google Cloud. Fue un trabajo adicional, para aprender y ver cómo se comporta en un entorno real.
+
+Entra en **http://35.196.111.68/ingresar** con alguno de estos usuarios:
+
+| Correo | Rol | Contraseña |
+|---|---|---|
+| `jefe.bodega@inventario.local` | Jefe de bodega | `Inventario2026` |
+| `compras@inventario.local` | Compras | `Inventario2026` |
+| `gerente@inventario.local` | Gerente | `Inventario2026` |
+
+El despliegue usa el mismo `docker-compose.yml` de la raíz. El flujo de GitHub Actions del repositorio ([.github/workflows/main.yml](.github/workflows/main.yml)) se conecta por SSH a la máquina virtual y vuelve a levantar los contenedores con la rama `develop` cada vez que se fusiona un pull request en `develop` (también se puede lanzar a mano).
