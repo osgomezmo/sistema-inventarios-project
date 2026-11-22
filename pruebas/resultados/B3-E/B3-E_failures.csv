@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,B3 GET /api/stock/{sku},HTTPError('500 Server Error: Internal Server Error for url: B3 GET /api/stock/{sku}'),261,2026-11-21T22:22:56Z,2026-11-21T22:23:38Z

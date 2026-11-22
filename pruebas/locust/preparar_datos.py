@@ -29,6 +29,8 @@ CATEGORIAS = [f"LT Cat {n:02d}" for n in range(1, 21)]
 SKUS = [f"LT-{n:04d}" for n in range(1, 2001)]
 BODEGAS = {"LT-B1": "Bodega LT 1", "LT-B2": "Bodega LT 2", "LT-B3": "Bodega LT 3"}
 SKUS_GRANDES = SKUS[:50]  # para salidas y traslados
+# Tipos para los nombres: dan coincidencias a las búsquedas de B2
+TIPOS = ["Leche", "Arroz", "Jabón", "Gaseosa", "Pan", "Aceite", "Queso", "Detergente", "Jugo", "Café"]
 CANTIDAD_GRANDE = 1_000_000
 CANTIDAD_PEQUENA = 20
 COSTO = 100
@@ -115,7 +117,7 @@ def asegurar_productos(admin, categorias):
     def crear(par):
         n, sku = par
         admin.pedir("POST", "/productos", esperado=(201,), json={
-            "sku": sku, "nombre": f"Producto LT {n + 1:04d}", "marca": "LT",
+            "sku": sku, "nombre": f"{TIPOS[n % len(TIPOS)]} LT {n + 1:04d}", "marca": "LT",
             "id_categoria": categorias[n % len(categorias)], "unidad_medida": "UNIDAD",
             "precio_venta": 1000, "stock_minimo": 10})
 
