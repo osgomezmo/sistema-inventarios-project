@@ -32,7 +32,7 @@ Criterio en N y P: p95 menor a 2 s y menos de 1 % de errores. Un 409 cuenta como
 
 ## Para el docente: correr las pruebas desde cero
 
-Las seis pruebas del bloque B se pueden correr desde la interfaz web de Locust, eligiéndolas de una lista:
+Las 13 pruebas de los bloques B y C se pueden correr desde la misma interfaz web de Locust, eligiéndolas de una lista:
 
 | Clase en la interfaz | ID | Qué mide | Componentes |
 |---|---|---|---|
@@ -42,6 +42,13 @@ Las seis pruebas del bloque B se pueden correr desde la interfaz web de Locust, 
 | `B4Movimientos` | B4 | `POST /api/movimientos` (salida de 1 unidad) | Gateway, ms-inventario, ms-productos, RabbitMQ |
 | `B5Traslados` | B5 | `POST /api/traslados` (1 unidad) | Gateway, ms-inventario, ms-productos, RabbitMQ |
 | `B6Kardex` | B6 | `GET /api/kardex` (un SKU, una bodega, el día) | Gateway, ms-inventario |
+| `C1Dashboard` | C1 | `GET /api/dashboard` (métricas consolidadas) | Gateway, ms-reportes |
+| `C2ValorizacionJson` | C2 | `GET /api/reportes/valorizacion` (JSON) | Gateway, ms-reportes |
+| `C3ValorizacionCsv` | C3 | `GET /api/reportes/valorizacion?formato=csv` (CSV) | Gateway, ms-reportes |
+| `C4Rotacion` | C4 | `GET /api/reportes/rotacion` (rotación de productos) | Gateway, ms-reportes |
+| `C5StockBajo` | C5 | `GET /api/reportes/stock-bajo` (alertas de stock) | Gateway, ms-reportes |
+| `C6Dispositivos` | C6 | `POST /api/dispositivos` (registro FCM) | Gateway, ms-notificaciones |
+| `C7Notificaciones` | C7 | `GET /api/notificaciones` (historial) | Gateway, ms-notificaciones |
 
 Se necesitan Docker (con Docker Compose) y Python 3.12. Todos los comandos se escriben desde la raíz del repositorio, salvo donde se indica otra carpeta.
 
@@ -50,7 +57,7 @@ Se necesitan Docker (con Docker Compose) y Python 3.12. Todos los comandos se es
    ```bash
    git clone https://github.com/osgomezmo/sistema-inventarios-project.git
    cd sistema-inventarios-project
-   git checkout daniel
+   git checkout develop
    ```
 
 2. **Crear la red compartida** (una sola vez):
@@ -135,7 +142,7 @@ El `docker-compose.yml` de la raíz trae Locust como un servicio más, con el pe
 docker compose --profile pruebas up -d --build   # levanta todo, incluido Locust
 ```
 
-Luego se abre http://127.0.0.1:8089, se elige una prueba (`B1AuthMe` … `B6Kardex`) y se escriben los usuarios y la tasa. La primera vez, el contenedor crea los datos de prueba; tarda unos 3 minutos y se puede seguir con `docker compose logs -f locust`.
+Luego se abre http://127.0.0.1:8089, se elige una prueba (`B1AuthMe` … `B6Kardex`, `C1Dashboard` … `C7Notificaciones`) y se escriben los usuarios y la tasa. La primera vez, el contenedor crea los datos de prueba; tarda unos 3 minutos y se puede seguir con `docker compose logs -f locust`.
 
 ```bash
 docker compose exec locust python limpiar_datos.py   # borra los datos LT
