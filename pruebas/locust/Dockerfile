@@ -1,4 +1,4 @@
-# Locust con la interfaz web del bloque B, para el docker-compose de la raíz
+# Locust con la interfaz web de los bloques B y C, para el docker-compose de la raíz
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,8 +11,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt mysql-connector-python==26.10.0
 
-# Solo los archivos del bloque B
-COPY bloque_b.py forma_estres.py preparar_datos.py limpiar_datos.py interfaz.py ./
+# Archivos de los bloques B y C
+COPY bloque_b.py bloque_c.py forma_estres.py preparar_datos.py limpiar_datos.py interfaz.py ./
 
 # Usuario sin privilegios. La contraseña del usuario de prueba (.env) vive en el
 # volumen /app/estado, para que no se pierda si el contenedor se recrea.
