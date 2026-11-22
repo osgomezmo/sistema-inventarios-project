@@ -440,11 +440,11 @@ Si salió bien, verás `0 filas de prueba` en las tres bases. Los reportes (ms-r
 
 **Otras pruebas del equipo:**
 
-- `pruebas/locust/bloque_c.py`: reportes y notificaciones (se corre desde la misma interfaz web).
+- `pruebas/locust/bloque_c.py`: reportes y notificaciones. Sus clases, de `C1Dashboard` a `C7Notificaciones`, aparecen en la misma interfaz web y se documentan en [pruebas/locust/README.md](pruebas/locust/README.md).
 - `pruebas/locust/proveedores_compras/`: ms-proveedores y ms-compras.
 - `infra/simulador/`: un simulador de eventos de RabbitMQ.
 
-Cada una tiene su propio README.
+Las de `proveedores_compras/` y `infra/simulador/` tienen su propio README en su carpeta.
 
 ---
 
