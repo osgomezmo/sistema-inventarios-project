@@ -136,8 +136,6 @@ git checkout develop
 
 Si salió bien, el último comando dice `Already on 'develop'` o `Switched to branch 'develop'`. La rama `develop` es la que tiene todo el sistema integrado.
 
-> **Nota del equipo:** el contenedor de pruebas de rendimiento (sección 7) está en la rama `daniel` hasta que se fusione en `develop`. Si `docker compose --profile pruebas config --services` no muestra `locust`, ejecuta `git checkout daniel` para esa parte.
-
 Todos los comandos que siguen se ejecutan **dentro de la carpeta `sistema-inventarios-project`**.
 
 ### 3.4. Crear el archivo de configuración
@@ -415,6 +413,13 @@ Luego:
    | `B4Movimientos` | `POST /api/movimientos`: una salida de 1 unidad (gateway, ms-inventario, ms-productos y RabbitMQ). |
    | `B5Traslados` | `POST /api/traslados`: un traslado de 1 unidad entre dos bodegas. |
    | `B6Kardex` | `GET /api/kardex`: la historia de un producto en el día. |
+   | `C1Dashboard` | `GET /api/dashboard`: tablero analítico consolidado (gateway y ms-reportes). |
+   | `C2ValorizacionJson` | `GET /api/reportes/valorizacion`: valorización del inventario en JSON (gateway y ms-reportes). |
+   | `C3ValorizacionCsv` | `GET /api/reportes/valorizacion?formato=csv`: exportación de valorización en CSV (gateway y ms-reportes). |
+   | `C4Rotacion` | `GET /api/reportes/rotacion`: reporte de rotación de inventario (gateway y ms-reportes). |
+   | `C5StockBajo` | `GET /api/reportes/stock-bajo`: alertas de stock bajo umbral (gateway y ms-reportes). |
+   | `C6Dispositivos` | `POST /api/dispositivos`: registro de tokens FCM (gateway y ms-notificaciones). |
+   | `C7Notificaciones` | `GET /api/notificaciones`: consulta paginada de notificaciones (gateway y ms-notificaciones). |
 
 3. En *Number of users* escribe 20 y en *Ramp up* escribe 5 (usuarios nuevos por segundo).
 4. Pulsa **Start**.
@@ -435,9 +440,8 @@ Si salió bien, verás `0 filas de prueba` en las tres bases. Los reportes (ms-r
 
 **Otras pruebas del equipo:**
 
-- `pruebas/locust/bloque_c.py`: reportes y notificaciones.
+- `pruebas/locust/bloque_c.py`: reportes y notificaciones (se corre desde la misma interfaz web).
 - `pruebas/locust/proveedores_compras/`: ms-proveedores y ms-compras.
-- `infra/locust/`: notificaciones y reportes.
 - `infra/simulador/`: un simulador de eventos de RabbitMQ.
 
 Cada una tiene su propio README.

@@ -35,7 +35,7 @@ TIPOS = ["Leche", "Arroz", "Jabón", "Gaseosa", "Pan", "Aceite", "Queso", "Deter
 CANTIDAD_GRANDE = 1_000_000
 CANTIDAD_PEQUENA = 20
 COSTO = 100
-HILOS = 8
+HILOS = int(os.getenv("LT_HILOS", "3"))
 
 
 def leer_env(ruta):

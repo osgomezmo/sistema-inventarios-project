@@ -1,4 +1,4 @@
-"""Abre la interfaz web de Locust para correr las pruebas del bloque B.
+"""Abre la interfaz web de Locust para correr las pruebas de los bloques B y C.
 
 Uso (desde pruebas/locust/, con el venv activado; Windows, Mac o Linux):
 
@@ -12,7 +12,7 @@ Pasos:
 3. Si falta el usuario de prueba o los datos LT, los crea con preparar_datos.py.
 4. Lanza Locust en el puerto 8089 de LT_WEB_HOST (por defecto 127.0.0.1; en el
    contenedor, 0.0.0.0) con el selector de clases: en la página se
-   elige la prueba (B1AuthMe ... B6Kardex), los usuarios y la tasa.
+   elige la prueba (B1AuthMe ... B6Kardex o C1Dashboard ... C7Notificaciones), los usuarios y la tasa.
 
 Nunca imprime contraseñas ni tokens.
 """
@@ -134,7 +134,7 @@ def preparar(email, password):
 
 
 def lanzar_locust(estres):
-    archivos = str(AQUI / "bloque_b.py")
+    archivos = str(AQUI / "bloque_b.py") + "," + str(AQUI / "bloque_c.py")
     entorno = dict(os.environ)
     if estres:
         archivos += "," + str(AQUI / "forma_estres.py")
@@ -143,7 +143,7 @@ def lanzar_locust(estres):
         entorno.update(LT_PAUSA_MIN="1", LT_PAUSA_MAX="3")
     comando = [sys.executable, "-m", "locust", "-f", archivos, "--class-picker", "--host", HOST,
                "--web-host", HOST_WEB, "--web-port", PUERTO_WEB]
-    print(f"\nAbre http://127.0.0.1:{PUERTO_WEB} en el navegador y elige una prueba (B1AuthMe ... B6Kardex).")
+    print(f"\nAbre http://127.0.0.1:{PUERTO_WEB} en el navegador y elige una prueba (B1AuthMe ... B6Kardex, C1Dashboard ... C7Notificaciones).")
     if estres:
         print("Modo estrés: elige también la forma FormaEstres en el selector.")
     print("Para terminar, presiona Ctrl+C en esta ventana.\n")
@@ -161,7 +161,7 @@ def lanzar_locust(estres):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Interfaz web de Locust para el bloque B.")
+    parser = argparse.ArgumentParser(description="Interfaz web de Locust para los bloques B y C.")
     parser.add_argument("--estres", action="store_true",
                         help="agrega la forma de estrés (de 20 a 200 usuarios, sumando 20 cada 30 s)")
     args = parser.parse_args()
