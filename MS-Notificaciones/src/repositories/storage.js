@@ -120,7 +120,15 @@ class StorageRepository {
     );
 
     if (index >= 0) {
-      data.dispositivos[index] = { ...data.dispositivos[index], ...dispositivoData };
+      const idExistente = data.dispositivos[index].id_dispositivo;
+      const dispositivoActualizado = {
+        ...data.dispositivos[index],
+        ...dispositivoData,
+        id_dispositivo: idExistente,
+      };
+      data.dispositivos[index] = dispositivoActualizado;
+      this._escribirLocal(data);
+      return dispositivoActualizado;
     } else {
       data.dispositivos.push(dispositivoData);
     }
