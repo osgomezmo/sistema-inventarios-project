@@ -522,7 +522,7 @@ services:
           - front-end
 
   # ----------------------------------------------------------------------------
-  # 10. Pruebas de rendimiento (Locust, bloque B). Solo con el perfil "pruebas":
+  # 10. Pruebas de rendimiento (Locust, bloques B y C). Solo con el perfil "pruebas":
   #     docker compose --profile pruebas up -d --build
   #     Interfaz web en http://127.0.0.1:8089
   # ----------------------------------------------------------------------------
